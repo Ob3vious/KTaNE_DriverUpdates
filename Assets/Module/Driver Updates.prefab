@@ -75,7 +75,7 @@ GameObject:
   - component: {fileID: 114823225734602974}
   - component: {fileID: 114577172473626414}
   m_Layer: 0
-  m_Name: Template
+  m_Name: Driver Updates
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -283,6 +283,6 @@ MonoBehaviour:
   m_Script: {fileID: -119419473, guid: 45b809be76fd7a3468b6f517bced6f28, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  ModuleType: template
-  ModuleDisplayName: Template
+  ModuleType: driverUpdates
+  ModuleDisplayName: Driver Updates
   RequiresTimerVisibility: 0
