@@ -20,6 +20,14 @@ public class DriverStoragePuzzle
             CellCount = 0;
             _width = width;
             _height = height;
+            Ambitions = new Queue<int>();
+        }
+
+        public Shape(int width, int height, bool[,] grid) : this(width, height)
+        {
+            for (int i = 0; i < width * height; i++)
+                if (grid[i / width, i % width])
+                    _cellValues[i] = -1;
         }
 
         public Shape(Shape old)
@@ -29,6 +37,7 @@ public class DriverStoragePuzzle
             _height = old._height;
             Value = old.Value;
             CellCount = old.CellCount;
+            Ambitions = new Queue<int>(old.Ambitions);
         }
 
         public void RegisterCell(int cell, bool block)
@@ -73,6 +82,124 @@ public class DriverStoragePuzzle
             CellCount++;
         }
 
+        public void RegisterRect(int topleft, int bottomright)
+        {
+            int x1 = topleft % _width;
+            int y1 = topleft / _width;
+            int x2 = bottomright % _width;
+            int y2 = bottomright / _width;
+
+            for (int i = y1; i <= y2; i++)
+                for (int j = x1; j <= x2; j++)
+                    _cellValues[i * _width + j] = 1;
+
+            for (int i = y1; i <= y2; i++)
+            {
+                if (x1 > 0)
+                    _cellValues[i * _width + x1 - 1] = -1;
+                if (x2 < _width - 1)
+                    _cellValues[i * _width + x2 + 1] = -1;
+            }
+
+            for (int i = x1; i <= x2; i++)
+            {
+                if (y1 > 0)
+                    _cellValues[(y1 - 1) * _width + i] = -1;
+                if (y2 < _height - 1)
+                    _cellValues[(y2 + 1) * _width + i] = -1;
+            }
+
+            int newCells = (x2 - x1 + 1) * (y2 - y1 + 1);
+
+            if (newCells == 1)
+            {
+                Ambitions.Enqueue(topleft);
+                //double register if this is the first cell because it has to bridge to be meaningful
+                if (CellCount == 0)
+                    Ambitions.Enqueue(topleft);
+            }
+
+            CellCount += newCells;
+            Value += newCells - 1;
+        }
+
+        public List<Shape> IterateRect(int baseCorner, bool onlyPositive)
+        {
+            List<Shape> result = new List<Shape>();
+
+            int x = baseCorner % _width;
+            int y = baseCorner / _width;
+
+            if (onlyPositive)
+            {
+                x--;
+                y--;
+            }
+
+            for (int i = -1; i < 2; i += 2)
+                for (int j = -1; j < 2; j += 2)
+                {
+                    if (onlyPositive && (j <= 0 || i <= 0))
+                        continue;
+
+                    if (y + i < 0 || y + i >= _height || x + j < 0 || x + j >= _width)
+                        continue;
+
+                    int maxH = _width;
+
+                    // I know this is a horrible way to use a for loop, deal with it
+                    for (int k = 0; maxH > 0; k++)
+                    {
+                        int newY = y + i * (k + 1);
+
+                        if (newY < 0 || newY >= _height)
+                            break;
+                        for (int l = 0; l < maxH; l++)
+                        {
+                            int newX = x + j * (l + 1);
+                            if (newX < 0 || newX >= _width || _cellValues[newY * _width + newX] != 0)
+                            {
+                                maxH = l;
+                                break;
+                            }
+
+                            Shape clone = new Shape(this);
+                            clone.RegisterRect(Math.Min(newY, y + i) * _width + Math.Min(newX, x + j), Math.Max(newY, y + i) * _width + Math.Max(newX, x + j));
+
+                            result.Add(clone);
+                        }
+                    }
+
+                    if (baseCorner / _width + i < 0 || baseCorner / _width + i >= _height || baseCorner % _width + j < 0 || baseCorner % _width + j >= _width)
+                        continue;
+
+                    if (_cellValues[(y + i) * _width + x + j] == 0)
+                        RegisterCell((y + i) * _width + x + j, true);
+                }
+
+            return result;
+        }
+
+        //stuff that needs to be handled in order to make the single cell rectangles worth their while; causes a shape to die of uselessness otherwise
+        public Queue<int> Ambitions { get; private set; }
+
+        public List<Shape> IterateAllRect()
+        {
+            List<Shape> result = new List<Shape>();
+
+            if (Ambitions.Count > 0)
+            {
+                result = IterateRect(Ambitions.Dequeue(), CellCount == 0);
+                return result;
+            }
+
+            for (int i = 0; i < _width * _height; i++)
+                if ((CellCount == 0 && _cellValues[i] >= 0) || _cellValues[i] > 0)
+                    result.AddRange(IterateRect(i, CellCount == 0));
+
+            return result;
+        }
+
         public List<Shape> IterateShape(bool[,] grid)
         {
             List<Shape> result = new List<Shape>();
@@ -112,7 +239,7 @@ public class DriverStoragePuzzle
 
         public override string ToString()
         {
-            return _cellValues.Select(x => x > 0 ? '1' : '0').Join("") + ";" + Value;
+            return _cellValues.Select(x => x > 0 ? '1' : (x < 0 ? '-' : '0')).Join("") + ";" + Value;
         }
     }
 
@@ -154,7 +281,7 @@ public class DriverStoragePuzzle
         while (coverage.Count > 0)
         {
             DriverStoragePuzzle trial = coverage[coverage.Count / 2];
-            if (trial.SearchSolutionNew(sizes))
+            if (trial.SearchSolutionRect(sizes))
             {
                 lastSuccess = trial;
                 coverage = coverage.Skip(coverage.Count / 2 + 1).ToList();
@@ -196,7 +323,7 @@ public class DriverStoragePuzzle
             DriverStoragePuzzle copy1 = new DriverStoragePuzzle(newPuzzle);
             copy1.Grid[y, x] = true;
             DriverStoragePuzzle copy2 = new DriverStoragePuzzle(copy1);
-            if (copy1.TryFloodFill() && copy2.TryCountRegions() < 3)
+            if (copy1.TryFloodFill() && copy2.TryCountRegions() < 4)
                 candidates.Add(i);
         }
 
@@ -209,6 +336,91 @@ public class DriverStoragePuzzle
         newPuzzle.Grid[newY, newX] = true;
 
         return newPuzzle;
+    }
+
+    public bool SearchSolutionRect(List<int> sizes)
+    {
+        int availableSpace = Enumerable.Range(0, Width * Height).Count(x => !Grid[x / Width, x % Width]);
+        Queue<Shape> evalQueue = new Queue<Shape>();
+        evalQueue.Enqueue(new Shape(Width, Height, Grid));
+        List<List<Shape>> shapesByValue = new List<List<Shape>>();
+
+        while (evalQueue.Count > 0)
+        {
+            Shape shape = evalQueue.Dequeue();
+            List<Shape> shapeList = shape.IterateAllRect();
+
+            foreach (Shape element in shapeList)
+            {
+                if (element.Value > sizes.Max())
+                    continue;
+
+                evalQueue.Enqueue(element);
+
+                if (element.Ambitions.Count > 0)
+                    continue;
+
+                while (element.Value >= shapesByValue.Count)
+                    shapesByValue.Add(new List<Shape>());
+
+                shapesByValue[element.Value].Add(element);
+
+                if (!sizes.Contains(element.Value) ||
+                    sizes.Any(x => x >= shapesByValue.Count ||
+                    shapesByValue[x].Count == 0))
+                    continue;
+
+                bool cut = false;
+                List<int> cutSizes = new List<int>();
+                sizes.ForEach(x =>
+                {
+                    if (cut || x != element.Value)
+                        cutSizes.Add(x);
+                    else
+                        cut = true;
+                });
+
+                List<int> iterators = new List<int> { -1 };
+                while (iterators.Count > 0)
+                {
+                    iterators[iterators.Count - 1]++;
+
+                    if (iterators.Last() >= shapesByValue[cutSizes[iterators.Count - 1]].Count)
+                    {
+                        iterators.RemoveAt(iterators.Count - 1);
+                        continue;
+                    }
+
+                    Shape newShape = shapesByValue[cutSizes[iterators.Count - 1]][iterators.Last()];
+
+                    if (element.Overlap(newShape))
+                        continue;
+
+                    bool isGood = true;
+                    for (int i = 0; i < iterators.Count - 1; i++)
+                        if (shapesByValue[cutSizes[i]][iterators[i]].Overlap(newShape))
+                        {
+                            isGood = false;
+                            break;
+                        }
+                    if (!isGood)
+                        continue;
+
+                    if (iterators.Count == cutSizes.Count)
+                    {
+                        List<Shape> entries = new List<Shape> { element };
+                        for (int i = 0; i < cutSizes.Count; i++)
+                            entries.Add(shapesByValue[cutSizes[i]][iterators[i]]);
+                        UnityEngine.Debug.Log(entries.Join(", "));
+                        return true;
+                    }
+
+                    iterators.Add(-1);
+                }
+            }
+        }
+
+        return false;
     }
 
     public bool SearchSolutionNew(List<int> sizes)
@@ -225,9 +437,9 @@ public class DriverStoragePuzzle
 
             foreach (Shape element in shapeList)
             {
-                int meander = 3;
-                if (element.CellCount - element.Value > meander || element.CellCount > sizes.Max() + meander)
-                    continue;
+                //int meander = 5;
+                //if (element.CellCount - element.Value > meander || element.CellCount > sizes.Max() + meander)
+                //    continue;
 
                 while (element.Value >= shapesByValue.Count)
                     shapesByValue.Add(new List<Shape>());

@@ -36,8 +36,13 @@ public class DriverUpdatesScript : MonoBehaviour
         DriverStoragePuzzle puzzle = new DriverStoragePuzzle(8, 8);
 
         //20, 19, 11, 6
-
-        puzzle = puzzle.FindPuzzle(new List<int>() { 12, 7, 6, 4 });
+        List<int> values = new List<int> { 8, 6, 3, 1 };
+        List<int> additions = new List<int> { 0, 1, 2, 3 }.Shuffle();
+        for (int i = 0; i < values.Count; i++)
+        {
+            values[i] += additions[i];
+        }
+        puzzle = puzzle.FindPuzzle(values);
         Debug.Log(Enumerable.Range(0, 8).Select(y => Enumerable.Range(0, 8).Select(x => puzzle.Grid[y, x] ? "#" : ".").Join("")).Join(";"));
     }
 }
