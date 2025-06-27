@@ -170,7 +170,7 @@ public class DriverStoragePuzzle
                         }
                     }
 
-                    if (baseCorner / _width + i < 0 || baseCorner / _width + i >= _height || baseCorner % _width + j < 0 || baseCorner % _width + j >= _width)
+                    if (y + i < 0 || y + i >= _height || x + j < 0 || x + j >= _width)
                         continue;
 
                     if (_cellValues[(y + i) * _width + x + j] == 0)
@@ -272,17 +272,20 @@ public class DriverStoragePuzzle
                 Grid[i, j] = old.Grid[i, j];
     }
 
-    public DriverStoragePuzzle FindPuzzle(List<int> sizes)
+    public DriverStoragePuzzle FindPuzzle(List<int> sizes, List<DriverStoragePuzzle> coverage, out List<Shape> pieces)
     {
-        List<DriverStoragePuzzle> coverage = GenerateCoverage();
-
+        UnityEngine.Debug.Log("starting");
         DriverStoragePuzzle lastSuccess = null;
+
+        pieces = null;
 
         while (coverage.Count > 0)
         {
             DriverStoragePuzzle trial = coverage[coverage.Count / 2];
-            if (trial.SearchSolutionRect(sizes))
+            List<Shape> newPieces = trial.SearchSolutionRect(sizes);
+            if (newPieces != null)
             {
+                pieces = newPieces;
                 lastSuccess = trial;
                 coverage = coverage.Skip(coverage.Count / 2 + 1).ToList();
                 UnityEngine.Debug.Log("success");
@@ -338,8 +341,11 @@ public class DriverStoragePuzzle
         return newPuzzle;
     }
 
-    public bool SearchSolutionRect(List<int> sizes)
+    public List<Shape> SearchSolutionRect(List<int> sizes)
     {
+        int meandering = 5;
+        int biggest = sizes.Max();
+
         int availableSpace = Enumerable.Range(0, Width * Height).Count(x => !Grid[x / Width, x % Width]);
         Queue<Shape> evalQueue = new Queue<Shape>();
         evalQueue.Enqueue(new Shape(Width, Height, Grid));
@@ -352,7 +358,10 @@ public class DriverStoragePuzzle
 
             foreach (Shape element in shapeList)
             {
-                if (element.Value > sizes.Max())
+                if (element.CellCount - element.Value > meandering)
+                    return null;
+
+                if (element.Value > biggest)
                     continue;
 
                 evalQueue.Enqueue(element);
@@ -408,19 +417,21 @@ public class DriverStoragePuzzle
 
                     if (iterators.Count == cutSizes.Count)
                     {
+                        UnityEngine.Debug.Log("pushing");
                         List<Shape> entries = new List<Shape> { element };
                         for (int i = 0; i < cutSizes.Count; i++)
+                        {
+                            UnityEngine.Debug.Log(shapesByValue[cutSizes[i]][iterators[i]]);
                             entries.Add(shapesByValue[cutSizes[i]][iterators[i]]);
-                        UnityEngine.Debug.Log(entries.Join(", "));
-                        return true;
+                        }
+                        return entries;
                     }
 
                     iterators.Add(-1);
                 }
             }
         }
-
-        return false;
+        return null;
     }
 
     public bool SearchSolutionNew(List<int> sizes)
@@ -503,7 +514,6 @@ public class DriverStoragePuzzle
                         List<Shape> entries = new List<Shape> { element };
                         for (int i = 0; i < cutSizes.Count; i++)
                             entries.Add(shapesByValue[cutSizes[i]][iterators[i]]);
-                        UnityEngine.Debug.Log(entries.Join(", "));
                         return true;
                     }
 
