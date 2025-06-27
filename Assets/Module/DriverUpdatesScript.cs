@@ -10,10 +10,14 @@ using Newtonsoft.Json.Linq;
 
 public class DriverUpdatesScript : MonoBehaviour
 {
+    public KMAudio Audio;
     public MarqueeDisplay Marquee;
     public LEDMatrixManager GridRend;
+    public KMSelectable[] SideButtons;
 
     private DriverStoragePuzzle _puzzle = null;
+    private Coroutine[] SideButtonAnimCoroutines;
+    private float SideButtonInitPosition;
 
     void Start()
     {
@@ -28,6 +32,15 @@ public class DriverUpdatesScript : MonoBehaviour
             GridRend.SetLED(5, 4, true);
             StartCoroutine(FetchPuzzle());
         };
+
+        SideButtonAnimCoroutines = new Coroutine[SideButtons.Length];
+        SideButtonInitPosition = SideButtons[0].transform.localPosition.y;
+        for (int i = 0; i < SideButtons.Length; i++)
+        {
+            int x = i;
+            SideButtons[x].OnInteract += delegate { SideButtonPress(x); return false; };
+            SideButtons[x].OnInteractEnded += delegate { SideButtonRelease(x); };
+        }
     }
 
 
@@ -97,5 +110,37 @@ public class DriverUpdatesScript : MonoBehaviour
             _thread.Interrupt();
             _isUsingThreads = false;
         }
+    }
+
+    private void SideButtonPress(int pos)
+    {
+        Audio.PlaySoundAtTransform("press", SideButtons[pos].transform);
+        if (SideButtonAnimCoroutines[pos] != null)
+            StopCoroutine(SideButtonAnimCoroutines[pos]);
+        SideButtonAnimCoroutines[pos] = StartCoroutine(SideButtonAnim(pos, false));
+    }
+
+    private void SideButtonRelease(int pos)
+    {
+        Audio.PlaySoundAtTransform("release", SideButtons[pos].transform);
+        if (SideButtonAnimCoroutines[pos] != null)
+            StopCoroutine(SideButtonAnimCoroutines[pos]);
+        SideButtonAnimCoroutines[pos] = StartCoroutine(SideButtonAnim(pos, true));
+    }
+
+    private IEnumerator SideButtonAnim(int pos, bool isUp, float duration = 0.05f, float depression = 0.002f)
+    {
+        SideButtons[pos].transform.localPosition = new Vector3(SideButtons[pos].transform.localPosition.x, isUp ? SideButtonInitPosition - depression : SideButtonInitPosition, SideButtons[pos].transform.localPosition.z);
+
+        float timer = 0;
+        while (timer < duration)
+        {
+            yield return null;
+            timer += Time.deltaTime;
+            SideButtons[pos].transform.localPosition = new Vector3(SideButtons[pos].transform.localPosition.x, Mathf.Lerp(isUp ? SideButtonInitPosition - depression : SideButtonInitPosition,
+                isUp ? SideButtonInitPosition : SideButtonInitPosition - depression, timer / duration), SideButtons[pos].transform.localPosition.z);
+        }
+
+        SideButtons[pos].transform.localPosition = new Vector3(SideButtons[pos].transform.localPosition.x, isUp ? SideButtonInitPosition : SideButtonInitPosition - depression, SideButtons[pos].transform.localPosition.z);
     }
 }
