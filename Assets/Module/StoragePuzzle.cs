@@ -402,15 +402,22 @@ public class DriverStoragePuzzle
                     if (element.Overlap(newShape))
                         continue;
 
+                    int cellCount = element.CellCount;
                     bool isGood = true;
                     for (int i = 0; i < iterators.Count - 1; i++)
-                        if (shapesByValue[cutSizes[i]][iterators[i]].Overlap(newShape))
+                    {
+                        Shape currentShape = shapesByValue[cutSizes[i]][iterators[i]];
+                        cellCount += currentShape.CellCount;
+                        if (currentShape.Overlap(newShape))
                         {
                             isGood = false;
                             break;
                         }
-                    if (!isGood)
+                    }
+                    cellCount += newShape.CellCount;
+                    if (!isGood || availableSpace - cellCount < cutSizes.Skip(iterators.Count).Sum())
                         continue;
+
 
                     if (iterators.Count == cutSizes.Count)
                     {

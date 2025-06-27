@@ -17,18 +17,17 @@ public class DriverUpdatesScript : MonoBehaviour
 
     void Start()
     {
+        Marquee.AssignTexts(new string[] { "Booting Up..." });
         GetComponent<KMBombModule>().OnActivate += delegate
         {
-            Marquee.AssignTexts(new string[] { "THIS IS EXAMPLEEEEEEE|TEXTYY WEXTYyyyyyy", "h", "ababababababababababababababababababababa", "", "wheeee|bobm" });
             GridRend.SetLED(2, 2, true);
             GridRend.SetLED(2, 5, true);
             GridRend.SetLED(4, 2, true);
             GridRend.SetLED(4, 5, true);
             GridRend.SetLED(5, 3, true);
             GridRend.SetLED(5, 4, true);
+            StartCoroutine(FetchPuzzle());
         };
-
-        StartCoroutine(FetchPuzzle());
     }
 
 
@@ -88,7 +87,7 @@ public class DriverUpdatesScript : MonoBehaviour
         Debug.Log(Enumerable.Range(0, 8).Select(y => Enumerable.Range(0, 8).Select(x => _puzzle.Grid[y, x] ? "#" : ".").Join("")).Join(";"));
         Debug.Log(pieces.Join(","));
 
-        //thread is done here
+        //thread stuff is done here
     }
 
     void OnDestroy()
