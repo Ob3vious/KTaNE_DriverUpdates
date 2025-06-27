@@ -274,7 +274,6 @@ public class DriverStoragePuzzle
 
     public DriverStoragePuzzle FindPuzzle(List<int> sizes, List<DriverStoragePuzzle> coverage, out List<Shape> pieces)
     {
-        UnityEngine.Debug.Log("starting");
         DriverStoragePuzzle lastSuccess = null;
 
         pieces = null;
@@ -288,12 +287,10 @@ public class DriverStoragePuzzle
                 pieces = newPieces;
                 lastSuccess = trial;
                 coverage = coverage.Skip(coverage.Count / 2 + 1).ToList();
-                UnityEngine.Debug.Log("success");
             }
             else
             {
                 coverage = coverage.Take(coverage.Count / 2).ToList();
-                UnityEngine.Debug.Log("fail");
             }
         }
 
@@ -417,13 +414,9 @@ public class DriverStoragePuzzle
 
                     if (iterators.Count == cutSizes.Count)
                     {
-                        UnityEngine.Debug.Log("pushing");
                         List<Shape> entries = new List<Shape> { element };
                         for (int i = 0; i < cutSizes.Count; i++)
-                        {
-                            UnityEngine.Debug.Log(shapesByValue[cutSizes[i]][iterators[i]]);
                             entries.Add(shapesByValue[cutSizes[i]][iterators[i]]);
-                        }
                         return entries;
                     }
 
@@ -548,8 +541,6 @@ public class DriverStoragePuzzle
                 shapes.Push(new Stack<int>(vetoes));
                 continue;
             }
-
-            UnityEngine.Debug.Log(shapes.Select(x => x.Join(",")).Join("; "));
             return 1;
         }
 

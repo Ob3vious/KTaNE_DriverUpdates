@@ -46,7 +46,7 @@ public class MarqueeDisplay : MonoBehaviour
 
         AllTexts = newTexts;
 
-        StartCoroutine(CycleAnim());
+        CycleAnimCoroutine = StartCoroutine(CycleAnim());
     }
 
     private IEnumerator CycleAnim(float interval = 2.5f, float offInterval = 0.035f)

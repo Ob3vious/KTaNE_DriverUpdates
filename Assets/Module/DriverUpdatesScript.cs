@@ -56,7 +56,7 @@ public class DriverUpdatesScript : MonoBehaviour
             }
 
             //threads needed here
-
+            Marquee.AssignTexts(new string[] { "Connecting..." });
             yield return new WaitWhile(() => _isUsingThreads);
             _isUsingThreads = true;
             bool generated = false;
@@ -69,15 +69,21 @@ public class DriverUpdatesScript : MonoBehaviour
             });
             _thread.Start();
 
+            Marquee.AssignTexts(new string[] { "Fetching Updates..." });
             yield return new WaitWhile(() => !generated);
             _isUsingThreads = false;
             _thread = null;
 
             if (pieces.Sum(x => x.CellCount - x.Value - 1) <= 4)
+            {
                 Debug.Log("fail:" + pieces.Join(","));
+                Marquee.AssignTexts(new string[] { "Connection Lost" });
+            }
         }
         //bends add 1pt each to complexity
         while (pieces.Sum(x => x.CellCount - x.Value - 1) < 4);
+
+        Marquee.AssignTexts(new string[] { "Updates Gathered|Press Confirm" });
 
         Debug.Log(Enumerable.Range(0, 8).Select(y => Enumerable.Range(0, 8).Select(x => _puzzle.Grid[y, x] ? "#" : ".").Join("")).Join(";"));
         Debug.Log(pieces.Join(","));
