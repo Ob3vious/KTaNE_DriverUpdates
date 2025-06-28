@@ -592,6 +592,13 @@ public class LEDMatrixSmall : MonoBehaviour
         }
     }
 
+    public void ClearAnimation()
+    {
+        if (LEDAnimCoroutine != null)
+            StopCoroutine(LEDAnimCoroutine);
+        BlankOut();
+    }
+
     public void BlankOut()
     {
         for (int i = 0; i < 8; i++)

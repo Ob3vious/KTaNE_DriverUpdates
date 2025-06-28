@@ -346,7 +346,7 @@ public class StInstall : UpdaterStateMachine.State
 
     private void ShowPercentage()
     {
-        StateMachine.Module.Marquee.AssignTexts(new string[] { "Updating...|" + _percentage + "% complete" });
+        StateMachine.Module.Marquee.AssignTexts(new string[] { "Updating...|" + _percentage + "% complete" }, true);
     }
 
     private void FailInstall()
