@@ -35,10 +35,10 @@ public class LEDMatrixSmall : MonoBehaviour
         public int Column;
         public bool State;
 
-        public FrameBit(int x, int y, bool status)
+        public FrameBit(int row, int column, bool status)
         {
-            Row = x;
-            Column = y;
+            Row = row;
+            Column = column;
             State = status;
         }
     }

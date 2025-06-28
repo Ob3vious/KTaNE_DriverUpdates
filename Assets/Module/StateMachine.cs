@@ -40,7 +40,7 @@ public class UpdaterStateMachine
     {
         CurrentState = null;
         Module = module;
-        _states = new List<State> { new StFetch(this), new StList(this), new StPick(this), /*StAllocate here*/ new StInstall(this) };
+        _states = new List<State> { new StFetch(this), new StList(this), new StPick(this), new StAllocate(this), new StInstall(this), new StSolve(this) };
     }
 
     public void SwitchState<T>() where T : State
@@ -116,6 +116,7 @@ public class StFetch : UpdaterStateMachine.State
 
         StateMachine.Module.ComponentsSelected = new List<bool> { true, true, false, false };
         StateMachine.Module.ComponentsSelectionImmutable = new List<bool> { true, true, false, false };
+        StateMachine.Module.ComponentNames = new List<string> { "Program", "Libraries", "Installer Patch", "Fast Loading" };
 
         StateMachine.Module.Marquee.AssignTexts(new string[] { "Updates Gathered|Press Confirm" });
         StateMachine.Module.GridRend.RunAnimation("tick");
@@ -165,13 +166,6 @@ public class StFetch : UpdaterStateMachine.State
         if (_ready && button == 3)
             StateMachine.SwitchState<StList>();
         base.OnPress(button);
-    }
-}
-
-public class StAllocate : UpdaterStateMachine.State
-{
-    public StAllocate(UpdaterStateMachine stateMachine) : base(stateMachine)
-    {
     }
 }
 
@@ -233,18 +227,21 @@ public class StPick : UpdaterStateMachine.State
 
     private void ShowSelectedComponents()
     {
+        StateMachine.Module.GridRend.ClearAnimation();
+
         if (_index >= StateMachine.Module.ComponentsSelected.Count)
         {
             StateMachine.Module.Marquee.AssignTexts(new string[] { "Selected " + StateMachine.Module.ComponentsSelected.Count(x => x) + "/" + StateMachine.Module.ComponentsSelected.Count + "|Press Confirm" });
-            StateMachine.Module.GridRend.RunAnimation("");
+
             return;
         }
 
         StateMachine.Module.Marquee.AssignTexts(new string[] {
-            new string[] { "Program", "Libraries", "Installer Patch", "Fast Loading" }[_index] + " (" + StateMachine.Module.ComponentSizes[_index] + "kB)|"
+            StateMachine.Module.ComponentNames[_index] + " (" + StateMachine.Module.ComponentSizes[_index] + "kB)|"
             + (StateMachine.Module.ComponentsSelected[_index] ? "Selected" : "Not Selected") +  (StateMachine.Module.ComponentsSelectionImmutable[_index] ? "*" : "") });
 
-        StateMachine.Module.GridRend.RunAnimation(StateMachine.Module.ComponentsSelected[_index] ? "tick" : "");
+        if (StateMachine.Module.ComponentsSelected[_index])
+            StateMachine.Module.GridRend.RunAnimation("tick");
     }
 
     public override void OnStart()
@@ -278,7 +275,7 @@ public class StPick : UpdaterStateMachine.State
             case 3:
                 if (_index >= StateMachine.Module.ComponentsSelected.Count)
                 {
-                    StateMachine.SwitchState<StInstall>();
+                    StateMachine.SwitchState<StAllocate>();
                     break;
                 }
 
@@ -288,6 +285,353 @@ public class StPick : UpdaterStateMachine.State
                 //invert the value
                 StateMachine.Module.ComponentsSelected[_index] ^= true;
                 ShowSelectedComponents();
+                break;
+            default:
+                break;
+        }
+        base.OnPress(button);
+    }
+}
+
+public class StAllocate : UpdaterStateMachine.State
+{
+    private List<DriverStoragePuzzle.Shape> _shapes = new List<DriverStoragePuzzle.Shape> { null, null, null, null };
+    private int _index = 0;
+    private bool _selectedRegion = false;
+    private int _cursor = -1;
+    private int _selectedCell = -1;
+    private List<int> _candidates = new List<int>();
+
+    public StAllocate(UpdaterStateMachine stateMachine) : base(stateMachine)
+    {
+    }
+
+    private void EvaluateCandidates()
+    {
+        _candidates.Clear();
+        _cursor = -1;
+
+        if (_shapes[_index].Value >= StateMachine.Module.ComponentSizes[_index])
+        {
+            ForceDeselect();
+            return;
+        }
+
+        int width = StateMachine.Module.Puzzle.Width;
+        int height = StateMachine.Module.Puzzle.Height;
+
+        if (_selectedCell < 0)
+        {
+            for (int i = 0; i < width * height; i++)
+            {
+                int x = i % width;
+                int y = i / width;
+
+                if (StateMachine.Module.Puzzle.Grid[y, x] || _shapes.Any(z => z != null && z.Cell(x, y)))
+                    continue;
+
+                if (_shapes[_index].CellCount == 0)
+                {
+                    _candidates.Add(i);
+                    continue;
+                }
+
+                bool hasUp = y > 0;
+                bool hasDown = y < height - 1;
+                bool hasLeft = x > 0;
+                bool hasRight = x < width - 1;
+
+                if (hasUp && _shapes[_index].Cell(x, y - 1) ||
+                    hasDown && _shapes[_index].Cell(x, y + 1) ||
+                    hasLeft && _shapes[_index].Cell(x - 1, y) ||
+                    hasRight && _shapes[_index].Cell(x + 1, y))
+                    continue;
+
+                if ((hasUp && hasLeft && _shapes[_index].Cell(x - 1, y - 1)) ||
+                    (hasUp && hasRight && _shapes[_index].Cell(x + 1, y - 1)) ||
+                    (hasDown && hasLeft && _shapes[_index].Cell(x - 1, y + 1)) ||
+                    (hasDown && hasRight && _shapes[_index].Cell(x + 1, y + 1)))
+                    _candidates.Add(i);
+
+                continue;
+            }
+
+            if (_candidates.Count > 0)
+                _cursor = _candidates.First();
+            else
+                ForceDeselect();
+
+            return;
+        }
+
+        {
+            int x = _selectedCell % width;
+            int y = _selectedCell / width;
+
+            bool hasUp = y > 0;
+            bool hasDown = y < height - 1;
+            bool hasLeft = x > 0;
+            bool hasRight = x < width - 1;
+
+            for (int i = -1; i < 2; i += 2)
+            {
+                if ((i < 0 && !hasUp) || (i > 0 && !hasDown))
+                    continue;
+
+                for (int j = -1; j < 2; j += 2)
+                {
+                    if ((j < 0 && !hasLeft) || (j > 0 && !hasRight))
+                        continue;
+
+                    int maxH = width;
+                    for (int k = 0; maxH > 0; k++)
+                    {
+                        int newY = y + i * k;
+
+                        if (newY < 0 || newY >= height)
+                            break;
+                        for (int l = 0; l < maxH; l++)
+                        {
+                            int newX = x + j * l;
+
+                            if (newX < 0 || newX >= width ||
+                                StateMachine.Module.Puzzle.Grid[newY, newX] || _shapes.Any(z => z != null && z.Cell(newX, newY)) ||
+                                (newX - 1 >= 0 && _shapes[_index].Cell(newX - 1, newY)) ||
+                                (newX + 1 < width && _shapes[_index].Cell(newX + 1, newY)) ||
+                                (newY - 1 >= 0 && _shapes[_index].Cell(newX, newY - 1)) ||
+                                (newY + 1 < height && _shapes[_index].Cell(newX, newY + 1)))
+                            {
+                                maxH = l;
+                                break;
+                            }
+
+                            _candidates.Add(newY * width + newX);
+                        }
+                    }
+                }
+            }
+
+            _candidates = _candidates.Distinct().OrderBy(z => z).ToList();
+
+            if (_candidates.Count > 0)
+                _cursor = _candidates.First();
+            else
+                ForceDeselect();
+        }
+    }
+
+    private void ForceDeselect()
+    {
+        _selectedRegion = false;
+        _selectedCell = -1;
+        _cursor = -1;
+    }
+
+    private void RenderShape()
+    {
+        if (_shapes[_index] == null)
+            _shapes[_index] = new DriverStoragePuzzle.Shape(StateMachine.Module.Puzzle.Width, StateMachine.Module.Puzzle.Height);
+
+        LEDMatrixSmall.FrameBit[][] frames = new LEDMatrixSmall.FrameBit[2][];
+        DriverStoragePuzzle puzzle = StateMachine.Module.Puzzle;
+        //LEDMatrixSmall.LEDAnim anim = new LEDMatrixSmall.LEDAnim()
+
+        if (!_selectedRegion)
+        {
+            frames[0] = Enumerable.Range(0, puzzle.Width * puzzle.Height).Select(x => new LEDMatrixSmall.FrameBit(x / puzzle.Width, x % puzzle.Width,
+                puzzle.Grid[x / puzzle.Width, x % puzzle.Width] || _shapes.Any(z => z != null && z.Cell(x % puzzle.Width, x / puzzle.Width))))
+                .Where(x => x.State).ToArray();
+            List<LEDMatrixSmall.FrameBit> pixelList = new List<LEDMatrixSmall.FrameBit>();
+            for (int i = 0; i < puzzle.Height; i++)
+                for (int j = 0; j < puzzle.Width; j++)
+                    if (_shapes[_index].Cell(j, i))
+                        pixelList.Add(new LEDMatrixSmall.FrameBit(i, j, false));
+
+            frames[1] = pixelList.ToArray();
+
+            frames[0] = frames[0].Concat(frames[1].Select(x => new LEDMatrixSmall.FrameBit(x.Row, x.Column, true))).ToArray();
+
+            StateMachine.Module.GridRend.AllDisplays.First().RunAnimation(new LEDMatrixSmall.LEDAnim("gridRender", 0.5f, frames));
+
+            return;
+        }
+
+        frames[0] = Enumerable.Range(0, puzzle.Width * puzzle.Height)
+            .Select(x => new LEDMatrixSmall.FrameBit(x / puzzle.Width, x % puzzle.Width,
+            puzzle.Grid[x / puzzle.Width, x % puzzle.Width] || _shapes[_index].Cell(x % puzzle.Width, x / puzzle.Width) || _shapes.Any(z => z != null && z.Cell(x % puzzle.Width, x / puzzle.Width))))
+            .Where(x => x.State).ToArray();
+
+        List<LEDMatrixSmall.FrameBit> newPixels = new List<LEDMatrixSmall.FrameBit>();
+        if (_selectedCell < 0)
+            newPixels.Add(new LEDMatrixSmall.FrameBit(_cursor / puzzle.Width, _cursor % puzzle.Width, false));
+        else
+        {
+            int minX = Math.Min(_cursor % puzzle.Width, _selectedCell % puzzle.Width);
+            int maxX = Math.Max(_cursor % puzzle.Width, _selectedCell % puzzle.Width);
+            int minY = Math.Min(_cursor / puzzle.Width, _selectedCell / puzzle.Width);
+            int maxY = Math.Max(_cursor / puzzle.Width, _selectedCell / puzzle.Width);
+
+            for (int i = minY; i <= maxY; i++)
+                for (int j = minX; j <= maxX; j++)
+                    newPixels.Add(new LEDMatrixSmall.FrameBit(i, j, false));
+        }
+
+        frames[1] = newPixels.ToArray();
+
+        frames[0] = frames[0].Concat(frames[1].Select(x => new LEDMatrixSmall.FrameBit(x.Row, x.Column, true))).ToArray();
+
+        StateMachine.Module.GridRend.AllDisplays.First().RunAnimation(new LEDMatrixSmall.LEDAnim("gridRender", 0.5f, frames));
+    }
+
+    private void UpdateText()
+    {
+        if (!_selectedRegion || _selectedCell < 0)
+        {
+            StateMachine.Module.Marquee.AssignTexts(new string[] { StateMachine.Module.ComponentNames[_index] + ":|" + _shapes[_index].Value + "/" + StateMachine.Module.ComponentSizes[_index] }, true);
+            return;
+        }
+
+        int width = StateMachine.Module.Puzzle.Width;
+        int extraValue = (Math.Abs(_cursor % width - _selectedCell % width) + 1) * (Math.Abs(_cursor / width - _selectedCell / width) + 1) - 1;
+        StateMachine.Module.Marquee.AssignTexts(new string[] { StateMachine.Module.ComponentNames[_index] + ":|" + (_shapes[_index].Value + extraValue) + "/" + StateMachine.Module.ComponentSizes[_index] + " (+" + extraValue + ")" }, true);
+    }
+
+    public override void OnStart()
+    {
+        _index = Enumerable.Range(0, StateMachine.Module.ComponentsSelected.Count).Last(x => x <= _index && StateMachine.Module.ComponentsSelected[x]);
+        ForceDeselect();
+        RenderShape();
+        UpdateText();
+        base.OnStart();
+    }
+
+    public override void OnEnd()
+    {
+        StateMachine.Module.GridRend.ClearAnimation();
+        base.OnEnd();
+    }
+
+    public override void OnPress(int button)
+    {
+        switch (button)
+        {
+            case 0:
+                if (_selectedRegion)
+                {
+                    int curIndex = _candidates.IndexOf(_cursor) - 1;
+                    if (curIndex < 0)
+                        curIndex += _candidates.Count;
+                    _cursor = _candidates[curIndex];
+
+                    RenderShape();
+                    if (_selectedCell >= 0)
+                        UpdateText();
+                    break;
+                }
+
+                { //fuck scopes
+                    List<bool> selection = StateMachine.Module.ComponentsSelected;
+                    if (selection.Take(_index).Any(x => x))
+                        _index = Enumerable.Range(0, selection.Count).Take(_index).Last(x => selection[x]);
+
+                    RenderShape();
+                    UpdateText();
+                }
+                break;
+            case 1:
+                if (_selectedRegion)
+                {
+                    int curIndex = _candidates.IndexOf(_cursor) + 1;
+                    if (curIndex >= _candidates.Count)
+                        curIndex -= _candidates.Count;
+                    _cursor = _candidates[curIndex];
+
+                    RenderShape();
+                    if (_selectedCell >= 0)
+                        UpdateText();
+                    break;
+                }
+
+                { //fuck scopes
+                    List<bool> selection = StateMachine.Module.ComponentsSelected;
+                    if (selection.Skip(_index + 1).Any(x => x))
+                        _index = Enumerable.Range(0, selection.Count).Skip(_index + 1).First(x => selection[x]);
+
+                    RenderShape();
+                    UpdateText();
+                    break;
+                }
+            case 2:
+                if (_selectedRegion)
+                {
+                    if (_selectedCell >= 0)
+                    {
+                        int cursorMaybe = _selectedCell;
+                        _selectedCell = -1;
+                        EvaluateCandidates();
+                        if (_candidates.Contains(cursorMaybe))
+                            _cursor = cursorMaybe;
+                        RenderShape();
+                        UpdateText();
+                        break;
+                    }
+
+                    _selectedRegion = false;
+                    RenderShape();
+                    break;
+                }
+
+                if (_shapes[_index].CellCount > 0)
+                {
+                    _shapes[_index] = new DriverStoragePuzzle.Shape(StateMachine.Module.Puzzle.Width, StateMachine.Module.Puzzle.Height);
+                    RenderShape();
+                    UpdateText();
+                    break;
+                }
+
+                StateMachine.SwitchState<StPick>();
+                break;
+            case 3:
+
+                if (_shapes[_index] == null)
+                    _shapes[_index] = new DriverStoragePuzzle.Shape(StateMachine.Module.Puzzle.Width, StateMachine.Module.Puzzle.Height);
+
+                if (_selectedRegion)
+                {
+                    if (_selectedCell < 0)
+                    {
+                        _selectedCell = _cursor;
+                        EvaluateCandidates();
+                        RenderShape();
+                        UpdateText();
+                        break;
+                    }
+
+                    int width = StateMachine.Module.Puzzle.Width;
+                    int x1 = _selectedCell % width;
+                    int x2 = _cursor % width;
+                    int y1 = _selectedCell / width;
+                    int y2 = _cursor / width;
+
+                    _shapes[_index].RegisterRect(Math.Min(y1, y2) * width + Math.Min(x1, x2), Math.Max(y1, y2) * width + Math.Max(x1, x2));
+                    _selectedCell = -1;
+                    EvaluateCandidates();
+                    RenderShape();
+                    UpdateText();
+                    break;
+                }
+
+                if (Enumerable.Range(0, StateMachine.Module.ComponentSizes.Count).All(x => !StateMachine.Module.ComponentsSelected[x] || (_shapes[x] != null && StateMachine.Module.ComponentSizes[x] == _shapes[x].Value)))
+                {
+                    StateMachine.SwitchState<StInstall>();
+                    break;
+                }
+
+                _selectedRegion = true;
+                _selectedCell = -1;
+                EvaluateCandidates();
+                RenderShape();
+                UpdateText();
                 break;
             default:
                 break;
@@ -320,6 +664,7 @@ public class StInstall : UpdaterStateMachine.State
         float timeTotal = UnityEngine.Random.Range(1f, 2f) * timeMult;
         Queue<float> percentageIncreaseMoments = new Queue<float>(Enumerable.Range(0, 99).Select(_ => UnityEngine.Random.Range(0, timeTotal)).OrderBy(x => x));
 
+        StateMachine.Module.GridRend.RunAnimation("throbber");
         float timer = 0;
         while (timer < timeTotal)
         {
@@ -337,7 +682,7 @@ public class StInstall : UpdaterStateMachine.State
         Debug.Log(_doesPass);
         if (_doesPass.EqualsAny(Pass.Correct, Pass.ForcedPass))
         {
-            //switch state to win here
+            StateMachine.SwitchState<StSolve>();
             yield break;
         }
 
@@ -351,6 +696,7 @@ public class StInstall : UpdaterStateMachine.State
 
     private void FailInstall()
     {
+        StateMachine.Module.GridRend.RunAnimation("x");
         _percentage = 0;
         if (_loadingRoutine != null)
         {
@@ -423,5 +769,26 @@ public class StInstall : UpdaterStateMachine.State
                 break;
         }
         base.OnPress(button);
+    }
+}
+
+public class StSolve : UpdaterStateMachine.State
+{
+    public StSolve(UpdaterStateMachine stateMachine) : base(stateMachine)
+    {
+    }
+
+    public override void OnStart()
+    {
+        StateMachine.Module.GridRend.RunAnimation("tick");
+        StateMachine.Module.Marquee.AssignTexts(new string[] { "Updates Complete!" });
+        StateMachine.Module.GetComponent<KMBombModule>().HandlePass();
+        base.OnStart();
+    }
+
+    public override void OnEnd()
+    {
+        throw new InvalidOperationException("Cannot 'unsolve' module");
+        base.OnEnd();
     }
 }

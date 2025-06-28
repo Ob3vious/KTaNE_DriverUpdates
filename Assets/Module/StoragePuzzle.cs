@@ -40,6 +40,11 @@ public class DriverStoragePuzzle
             Ambitions = new Queue<int>(old.Ambitions);
         }
 
+        public bool Cell(int x, int y)
+        {
+            return _cellValues[y * _width + x] > 0;
+        }
+
         public void RegisterCell(int cell, bool block)
         {
 

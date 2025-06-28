@@ -27,6 +27,7 @@ public class DriverUpdatesScript : MonoBehaviour
     public List<int> ComponentSizes = null;
     public List<bool> ComponentsSelected = null;
     public List<bool> ComponentsSelectionImmutable = null;
+    public List<string> ComponentNames = null;
 
 
     void Start()
