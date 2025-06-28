@@ -15,13 +15,28 @@ public class DriverUpdatesScript : MonoBehaviour
     public LEDMatrixManager GridRend;
     public KMSelectable[] SideButtons;
 
-    private DriverStoragePuzzle _puzzle = null;
     private Coroutine[] SideButtonAnimCoroutines;
     private float SideButtonInitPosition;
+    public bool IsActive { get; private set; }
+
+    private UpdaterStateMachine _stateMachine;
+
+    public DriverStoragePuzzle Puzzle = null;
+    public List<DriverStoragePuzzle.Shape> PotentialSolution = null;
+    public List<UpdateLog> UpdateLogList = null;
+    public List<int> ComponentSizes = null;
+    public List<bool> ComponentsSelected = null;
+    public List<bool> ComponentsSelectionImmutable = null;
+
 
     void Start()
     {
-        Marquee.AssignTexts(new string[] { "Booting Up..." });
+        IsActive = false;
+
+        _stateMachine = new UpdaterStateMachine(this);
+        _stateMachine.SwitchState<StFetch>();
+
+        
         GetComponent<KMBombModule>().OnActivate += delegate
         {
             GridRend.SetLED(2, 2, true);
@@ -30,7 +45,9 @@ public class DriverUpdatesScript : MonoBehaviour
             GridRend.SetLED(4, 5, true);
             GridRend.SetLED(5, 3, true);
             GridRend.SetLED(5, 4, true);
-            StartCoroutine(FetchPuzzle());
+            //StartCoroutine(FetchPuzzle());
+
+            IsActive = true;
         };
 
         SideButtonAnimCoroutines = new Coroutine[SideButtons.Length];
@@ -45,71 +62,12 @@ public class DriverUpdatesScript : MonoBehaviour
 
 
 
-    private Thread _thread = null;
-    private static bool _isUsingThreads = false;
-    private IEnumerator FetchPuzzle()
-    {
 
 
-        //Wait an extra frame so TwitchPlaysActive can be set in TestHarness
-        //yield return null;
-        List<DriverStoragePuzzle.Shape> pieces = null;
-        do
-        {
-            yield return new WaitForSecondsRealtime(Rnd.Range(1f, 4f));
-
-            DriverStoragePuzzle puzzle = new DriverStoragePuzzle(8, 8);
-
-            List<int> values = new List<int> { 10, 6, 3, 1 };
-            List<int> additions = new List<int> { 0, 1, 2, 3 }.Shuffle();
-            for (int i = 0; i < values.Count; i++)
-            {
-                values[i] += additions[i];
-            }
-
-            //threads needed here
-            Marquee.AssignTexts(new string[] { "Connecting..." });
-            yield return new WaitWhile(() => _isUsingThreads);
-            _isUsingThreads = true;
-            bool generated = false;
-
-            List<DriverStoragePuzzle> coverage = puzzle.GenerateCoverage();
-            _thread = new Thread(() =>
-            {
-                _puzzle = puzzle.FindPuzzle(values, coverage, out pieces);
-                generated = true;
-            });
-            _thread.Start();
-
-            Marquee.AssignTexts(new string[] { "Fetching Updates..." });
-            yield return new WaitWhile(() => !generated);
-            _isUsingThreads = false;
-            _thread = null;
-
-            if (pieces.Sum(x => x.CellCount - x.Value - 1) <= 4)
-            {
-                Debug.Log("fail:" + pieces.Join(","));
-                Marquee.AssignTexts(new string[] { "Connection Lost" });
-            }
-        }
-        //bends add 1pt each to complexity
-        while (pieces.Sum(x => x.CellCount - x.Value - 1) < 4);
-
-        Marquee.AssignTexts(new string[] { "Updates Gathered|Press Confirm" });
-
-        Debug.Log(Enumerable.Range(0, 8).Select(y => Enumerable.Range(0, 8).Select(x => _puzzle.Grid[y, x] ? "#" : ".").Join("")).Join(";"));
-        Debug.Log(pieces.Join(","));
-
-        //thread stuff is done here
-    }
 
     void OnDestroy()
     {
-        if (_thread != null)
-        {
-            _thread.Interrupt();
-            _isUsingThreads = false;
-        }
+        new UpdaterStateMachine(this).CurrentState.OnEnd();
     }
 
     private void SideButtonPress(int pos)
@@ -118,6 +76,8 @@ public class DriverUpdatesScript : MonoBehaviour
         if (SideButtonAnimCoroutines[pos] != null)
             StopCoroutine(SideButtonAnimCoroutines[pos]);
         SideButtonAnimCoroutines[pos] = StartCoroutine(SideButtonAnim(pos, false));
+
+        _stateMachine.CurrentState.OnPress(pos);
     }
 
     private void SideButtonRelease(int pos)
