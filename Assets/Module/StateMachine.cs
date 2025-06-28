@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using UnityEngine;
 
@@ -39,7 +40,7 @@ public class UpdaterStateMachine
     {
         CurrentState = null;
         Module = module;
-        _states = new List<State> { new StFetch(this), new StList(this), new StPick(this) };
+        _states = new List<State> { new StFetch(this), new StList(this), new StPick(this), /*StAllocate here*/ new StInstall(this) };
     }
 
     public void SwitchState<T>() where T : State
@@ -70,10 +71,11 @@ public class StFetch : UpdaterStateMachine.State
     private IEnumerator FetchPuzzle()
     {
         yield return new WaitWhile(() => !StateMachine.Module.IsActive);
-        yield return new WaitForSecondsRealtime(UnityEngine.Random.Range(1f, 3f));
+        yield return new WaitForSecondsRealtime(UnityEngine.Random.Range(0f, 3f));
         StateMachine.Module.PotentialSolution = null;
         do
         {
+            yield return new WaitForSecondsRealtime(1f);
             DriverStoragePuzzle puzzle = new DriverStoragePuzzle(8, 8);
 
             StateMachine.Module.ComponentSizes = new List<int> { 10, 6, 3, 1 };
@@ -205,6 +207,7 @@ public class StList : UpdaterStateMachine.State
             default:
                 break;
         }
+        base.OnPress(button);
     }
 }
 
@@ -260,7 +263,7 @@ public class StPick : UpdaterStateMachine.State
             case 3:
                 if (_index >= StateMachine.Module.ComponentsSelected.Count)
                 {
-                    //StateMachine.SwitchState<>();
+                    StateMachine.SwitchState<StInstall>();
                     break;
                 }
 
@@ -274,5 +277,135 @@ public class StPick : UpdaterStateMachine.State
             default:
                 break;
         }
+        base.OnPress(button);
+    }
+}
+
+public class StInstall : UpdaterStateMachine.State
+{
+    private int _percentage = 0;
+    private Coroutine _loadingRoutine = null;
+    private enum Pass
+    {
+        Unpressed,
+        Correct,
+        Failed,
+        ForcedPass,
+        AwaitingRetry
+    }
+    private Pass _doesPass = Pass.Unpressed;
+
+    public StInstall(UpdaterStateMachine stateMachine) : base(stateMachine)
+    {
+    }
+
+    private IEnumerator InstallUpdates()
+    {
+        int timeMult = StateMachine.Module.ComponentsSelected[3] ? 10 : 120;
+        float timeTotal = UnityEngine.Random.Range(1f, 2f) * timeMult;
+        Queue<float> percentageIncreaseMoments = new Queue<float>(Enumerable.Range(0, 99).Select(_ => UnityEngine.Random.Range(0, timeTotal)).OrderBy(x => x));
+
+        float timer = 0;
+        while (timer < timeTotal)
+        {
+            while (percentageIncreaseMoments.Count > 0 && timer > percentageIncreaseMoments.Peek())
+            {
+                percentageIncreaseMoments.Dequeue();
+                _percentage++;
+                ShowPercentage();
+            }
+
+            yield return null;
+            timer += Time.deltaTime;
+        }
+
+        Debug.Log(_doesPass);
+        if (_doesPass.EqualsAny(Pass.Correct, Pass.ForcedPass))
+        {
+            //switch state to win here
+            yield break;
+        }
+
+        FailInstall();
+    }
+
+    private void ShowPercentage()
+    {
+        StateMachine.Module.Marquee.AssignTexts(new string[] { "Updating...|" + _percentage + "% complete" });
+    }
+
+    private void FailInstall()
+    {
+        _percentage = 0;
+        if (_loadingRoutine != null)
+        {
+            StateMachine.Module.StopCoroutine(_loadingRoutine);
+            _loadingRoutine = null;
+        }
+        StateMachine.Module.Marquee.AssignTexts(new string[] { "Update Failed|Press Confirm" });
+        _doesPass = Pass.AwaitingRetry;
+    }
+
+    public override void OnStart()
+    {
+        _doesPass = StateMachine.Module.ComponentsSelected[2] ? Pass.ForcedPass : Pass.Unpressed;
+        _percentage = 0;
+        ShowPercentage();
+        _loadingRoutine = StateMachine.Module.StartCoroutine(InstallUpdates());
+        base.OnStart();
+    }
+
+    public override void OnEnd()
+    {
+        if (_loadingRoutine != null)
+        {
+            StateMachine.Module.StopCoroutine(_loadingRoutine);
+            _loadingRoutine = null;
+        }
+        base.OnEnd();
+    }
+
+    public override void OnPress(int button)
+    {
+        switch (button)
+        {
+            case 2:
+                if (_doesPass == Pass.AwaitingRetry)
+                {
+                    StateMachine.SwitchState<StPick>();
+                    break;
+                }
+
+                FailInstall();
+                break;
+            case 3:
+                switch (_doesPass)
+                {
+                    case Pass.AwaitingRetry:
+                        _loadingRoutine = StateMachine.Module.StartCoroutine(InstallUpdates());
+                        _doesPass = Pass.Unpressed;
+                        break;
+                    case Pass.Unpressed:
+                        if (Math.Abs(_percentage - UpdateLog.EvaluateTotalScore(StateMachine.Module.UpdateLogList)) > 5)
+                        {
+                            _doesPass = Pass.Failed;
+                            break;
+                        }
+
+                        _doesPass = Pass.Correct;
+                        break;
+                    case Pass.Correct:
+                        _doesPass = Pass.Failed;
+                        break;
+                    case Pass.Failed: case Pass.ForcedPass:
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            default:
+                break;
+        }
+        base.OnPress(button);
     }
 }
