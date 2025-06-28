@@ -104,25 +104,35 @@ public class StFetch : UpdaterStateMachine.State
             _isUsingThreads = false;
             _thread = null;
 
-            if (StateMachine.Module.PotentialSolution.Sum(x => x.CellCount - x.Value - 1) <= 4)
+            if (StateMachine.Module.PotentialSolution.Sum(x => x.CellCount - x.Value - 1) < 4)
             {
-                Debug.Log("fail:" + StateMachine.Module.PotentialSolution.Join(","));
+                StateMachine.Module.Log("Failed to find a solution. Retrying...");
                 StateMachine.Module.Marquee.AssignTexts(new string[] { "Connection Lost" });
                 StateMachine.Module.GridRend.RunAnimation("x");
+                continue;
             }
+
+            break;
         }
         //bends add 1pt each to complexity
-        while (StateMachine.Module.PotentialSolution.Sum(x => x.CellCount - x.Value - 1) < 4);
+        while (true);
 
         StateMachine.Module.ComponentsSelected = new List<bool> { true, true, false, false };
         StateMachine.Module.ComponentsSelectionImmutable = new List<bool> { true, true, false, false };
-        StateMachine.Module.ComponentNames = new List<string> { "Program", "Libraries", "Installer Patch", "Fast Loading" };
+        StateMachine.Module.ComponentNames = new List<string> { "Program", "Libraries", "Installer Patch", "Faster Loading" };
 
         StateMachine.Module.Marquee.AssignTexts(new string[] { "Updates Gathered|Press Confirm" });
         StateMachine.Module.GridRend.RunAnimation("tick");
 
-        Debug.Log(Enumerable.Range(0, 8).Select(y => Enumerable.Range(0, 8).Select(x => StateMachine.Module.Puzzle.Grid[y, x] ? "#" : ".").Join("")).Join(";"));
-        Debug.Log(StateMachine.Module.PotentialSolution.Join(","));
+        List<int> shapeOrder = new List<int>();
+        while (shapeOrder.Count < StateMachine.Module.ComponentSizes.Count)
+            shapeOrder.Add(Enumerable.Range(0, StateMachine.Module.ComponentSizes.Count)
+                .First(x => !shapeOrder.Contains(x) && StateMachine.Module.PotentialSolution[shapeOrder.Count].Value == StateMachine.Module.ComponentSizes[x]));
+
+        StateMachine.Module.Log("Found a grid and solution with sizes [{0}]: {1}.", StateMachine.Module.ComponentSizes.Join(", "),
+            Enumerable.Range(0, 8).Select(y => Enumerable.Range(0, 8).Select(x =>
+            StateMachine.Module.Puzzle.Grid[y, x] ? "#" :
+            (shapeOrder.Any(z => StateMachine.Module.PotentialSolution[z].Cell(x, y)) ? (shapeOrder.First(z => StateMachine.Module.PotentialSolution[z].Cell(x, y)) + 1).ToString() : "-")).Join("")).Join(";"));
 
         //thread stuff is done here
 
@@ -132,9 +142,11 @@ public class StFetch : UpdaterStateMachine.State
     private void GenerateUpdateLogs()
     {
         StateMachine.Module.UpdateLogList = UpdateLog.GenerateLogs();
-        Debug.Log(StateMachine.Module.UpdateLogList.Join("; "));
-        Debug.Log(StateMachine.Module.UpdateLogList.Select(x => x.EvaluateScore()).Join(", "));
-        Debug.Log(UpdateLog.EvaluateTotalScore(StateMachine.Module.UpdateLogList));
+
+        for (int i = 0; i < StateMachine.Module.UpdateLogList.Count; i++)
+            StateMachine.Module.Log("Generated update {0}/{1}: {2}. The score for this update is {3}.", i + 1, StateMachine.Module.UpdateLogList.Count, StateMachine.Module.UpdateLogList[i], StateMachine.Module.UpdateLogList[i].EvaluateScore());
+
+        StateMachine.Module.Log("The total score comes out to be {0}.", UpdateLog.EvaluateTotalScore(StateMachine.Module.UpdateLogList));
     }
 
     public override void OnStart()
@@ -275,6 +287,8 @@ public class StPick : UpdaterStateMachine.State
             case 3:
                 if (_index >= StateMachine.Module.ComponentsSelected.Count)
                 {
+                    StateMachine.Module.Log("Attempting to allocate: {0}.", Enumerable.Range(0, StateMachine.Module.ComponentsSelected.Count).Where(x => StateMachine.Module.ComponentsSelected[x])
+                        .Select(x => StateMachine.Module.ComponentNames[x] + " (" + StateMachine.Module.ComponentSizes[x] + "kB)").Join(", "));
                     StateMachine.SwitchState<StAllocate>();
                     break;
                 }
@@ -284,6 +298,7 @@ public class StPick : UpdaterStateMachine.State
 
                 //invert the value
                 StateMachine.Module.ComponentsSelected[_index] ^= true;
+                StateMachine.Module.Log("{0} the installation of \"{1}\".", StateMachine.Module.ComponentsSelected[_index] ? "Enabled" : "Disabled", StateMachine.Module.ComponentNames[_index]);
                 ShowSelectedComponents();
                 break;
             default:
@@ -487,18 +502,21 @@ public class StAllocate : UpdaterStateMachine.State
     {
         if (!_selectedRegion || _selectedCell < 0)
         {
-            StateMachine.Module.Marquee.AssignTexts(new string[] { StateMachine.Module.ComponentNames[_index] + ":|" + _shapes[_index].Value + "/" + StateMachine.Module.ComponentSizes[_index] }, true);
+            StateMachine.Module.Marquee.AssignTexts(new string[] { StateMachine.Module.ComponentNames[_index] + ":|" + _shapes[_index].Value + "/" + StateMachine.Module.ComponentSizes[_index] });
             return;
         }
 
         int width = StateMachine.Module.Puzzle.Width;
         int extraValue = (Math.Abs(_cursor % width - _selectedCell % width) + 1) * (Math.Abs(_cursor / width - _selectedCell / width) + 1) - 1;
-        StateMachine.Module.Marquee.AssignTexts(new string[] { StateMachine.Module.ComponentNames[_index] + ":|" + (_shapes[_index].Value + extraValue) + "/" + StateMachine.Module.ComponentSizes[_index] + " (+" + extraValue + ")" }, true);
+        StateMachine.Module.Marquee.AssignTexts(new string[] { StateMachine.Module.ComponentNames[_index] + ":|" + (_shapes[_index].Value + extraValue) + "/" + StateMachine.Module.ComponentSizes[_index] + " (+" + extraValue + ")" });
     }
 
     public override void OnStart()
     {
-        _index = Enumerable.Range(0, StateMachine.Module.ComponentsSelected.Count).Last(x => x <= _index && StateMachine.Module.ComponentsSelected[x]);
+        List<bool> components = StateMachine.Module.ComponentsSelected;
+        _shapes = Enumerable.Range(0, components.Count).Select(x => !components[x] ? null : _shapes[x]).ToList();
+
+        _index = Enumerable.Range(0, components.Count).Last(x => x <= _index && components[x]);
         ForceDeselect();
         RenderShape();
         UpdateText();
@@ -623,6 +641,12 @@ public class StAllocate : UpdaterStateMachine.State
 
                 if (Enumerable.Range(0, StateMachine.Module.ComponentSizes.Count).All(x => !StateMachine.Module.ComponentsSelected[x] || (_shapes[x] != null && StateMachine.Module.ComponentSizes[x] == _shapes[x].Value)))
                 {
+                    List<int> shapeOrder = Enumerable.Range(0, _shapes.Count).Where(x => _shapes[x] != null).ToList();
+                    StateMachine.Module.Log("The memory allocation has been solved: {0}.",
+                        Enumerable.Range(0, 8).Select(y => Enumerable.Range(0, 8).Select(x =>
+                        StateMachine.Module.Puzzle.Grid[y, x] ? "#" :
+                        (shapeOrder.Any(z => _shapes[z].Cell(x, y)) ? (shapeOrder.First(z => _shapes[z].Cell(x, y)) + 1).ToString() : "-")).Join("")).Join(";"));
+
                     StateMachine.SwitchState<StInstall>();
                     break;
                 }
@@ -665,6 +689,10 @@ public class StInstall : UpdaterStateMachine.State
         Queue<float> percentageIncreaseMoments = new Queue<float>(Enumerable.Range(0, 99).Select(_ => UnityEngine.Random.Range(0, timeTotal)).OrderBy(x => x));
 
         StateMachine.Module.GridRend.RunAnimation("throbber");
+        StateMachine.Module.Log("Starting installation. Estimated time: {0} seconds.", timeTotal);
+        if (_doesPass == Pass.ForcedPass)
+            StateMachine.Module.Log("The update is guaranteed to succeed.");
+
         float timer = 0;
         while (timer < timeTotal)
         {
@@ -679,13 +707,16 @@ public class StInstall : UpdaterStateMachine.State
             timer += Time.deltaTime;
         }
 
-        Debug.Log(_doesPass);
         if (_doesPass.EqualsAny(Pass.Correct, Pass.ForcedPass))
         {
+            StateMachine.Module.Log("The updates have been applied successfully. Solving module.");
             StateMachine.SwitchState<StSolve>();
             yield break;
         }
 
+        if (_doesPass == Pass.Unpressed)
+            StateMachine.Module.Log("Did not press confirm. The update will fail.");
+        StateMachine.Module.Log("Update failed.");
         FailInstall();
     }
 
@@ -737,6 +768,7 @@ public class StInstall : UpdaterStateMachine.State
                     break;
                 }
 
+                StateMachine.Module.Log("Update failed by choice.");
                 FailInstall();
                 break;
             case 3:
@@ -749,13 +781,16 @@ public class StInstall : UpdaterStateMachine.State
                     case Pass.Unpressed:
                         if (Math.Abs(_percentage - UpdateLog.EvaluateTotalScore(StateMachine.Module.UpdateLogList)) > 5)
                         {
+                            StateMachine.Module.Log("Pressed confirm at the wrong time. The update will fail.");
                             _doesPass = Pass.Failed;
                             break;
                         }
 
+                        StateMachine.Module.Log("Pressed confirm at the right time.");
                         _doesPass = Pass.Correct;
                         break;
                     case Pass.Correct:
+                        StateMachine.Module.Log("Pressed confirm more than once. The update will fail.");
                         _doesPass = Pass.Failed;
                         break;
                     case Pass.Failed:
@@ -789,6 +824,5 @@ public class StSolve : UpdaterStateMachine.State
     public override void OnEnd()
     {
         throw new InvalidOperationException("Cannot 'unsolve' module");
-        base.OnEnd();
     }
 }

@@ -127,7 +127,7 @@ public class UpdateLog
             switch (Math.Sign(score))
             {
                 case 1:
-                    totalScore = Math.Abs(totalScore - score);
+                    totalScore = Math.Abs(totalScore - score) + 5;
                     break;
                 case -1:
                     totalScore = Math.Abs(totalScore * 2 + score);

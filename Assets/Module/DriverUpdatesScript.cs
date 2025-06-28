@@ -29,9 +29,12 @@ public class DriverUpdatesScript : MonoBehaviour
     public List<bool> ComponentsSelectionImmutable = null;
     public List<string> ComponentNames = null;
 
+    private static int _moduleIdCounter = 1;
+    private int _moduleID = 0;
 
     void Start()
     {
+        _moduleID = _moduleIdCounter++;
         IsActive = false;
 
         _stateMachine = new UpdaterStateMachine(this);
@@ -60,10 +63,14 @@ public class DriverUpdatesScript : MonoBehaviour
 
 
 
-
     void OnDestroy()
     {
         new UpdaterStateMachine(this).CurrentState.OnEnd();
+    }
+
+    public void Log(string text, params object[] args)
+    {
+        Debug.LogFormat("[Driver Updates #{0}] {1}", _moduleID, string.Format(text, args));
     }
 
     private void SideButtonPress(int pos)
