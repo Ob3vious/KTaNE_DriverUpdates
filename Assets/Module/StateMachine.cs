@@ -168,6 +168,13 @@ public class StFetch : UpdaterStateMachine.State
     }
 }
 
+public class StAllocate : UpdaterStateMachine.State
+{
+    public StAllocate(UpdaterStateMachine stateMachine) : base(stateMachine)
+    {
+    }
+}
+
 public class StList : UpdaterStateMachine.State
 {
     private int _index = 0;
@@ -229,12 +236,15 @@ public class StPick : UpdaterStateMachine.State
         if (_index >= StateMachine.Module.ComponentsSelected.Count)
         {
             StateMachine.Module.Marquee.AssignTexts(new string[] { "Selected " + StateMachine.Module.ComponentsSelected.Count(x => x) + "/" + StateMachine.Module.ComponentsSelected.Count + "|Press Confirm" });
+            StateMachine.Module.GridRend.RunAnimation("");
             return;
         }
 
-        StateMachine.Module.Marquee.AssignTexts(new string[] { 
-            new string[] { "Program", "Libraries", "Installer Patch", "Fast Loading" }[_index] + " (" + StateMachine.Module.ComponentSizes[_index] + "kB)|" 
+        StateMachine.Module.Marquee.AssignTexts(new string[] {
+            new string[] { "Program", "Libraries", "Installer Patch", "Fast Loading" }[_index] + " (" + StateMachine.Module.ComponentSizes[_index] + "kB)|"
             + (StateMachine.Module.ComponentsSelected[_index] ? "Selected" : "Not Selected") +  (StateMachine.Module.ComponentsSelectionImmutable[_index] ? "*" : "") });
+
+        StateMachine.Module.GridRend.RunAnimation(StateMachine.Module.ComponentsSelected[_index] ? "tick" : "");
     }
 
     public override void OnStart()
@@ -402,7 +412,8 @@ public class StInstall : UpdaterStateMachine.State
                     case Pass.Correct:
                         _doesPass = Pass.Failed;
                         break;
-                    case Pass.Failed: case Pass.ForcedPass:
+                    case Pass.Failed:
+                    case Pass.ForcedPass:
                         break;
                     default:
                         break;

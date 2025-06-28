@@ -74,12 +74,12 @@ public class LEDMatrixSmall : MonoBehaviour
             {
                 new FrameBit(1, 0, true),
                 new FrameBit(1, 7, true),
-                new FrameBit(1, 1, true),
-                new FrameBit(1, 2, true),
-                new FrameBit(1, 3, true),
-                new FrameBit(1, 4, true),
-                new FrameBit(1, 5, true),
-                new FrameBit(1, 6, true),
+                new FrameBit(0, 1, true),
+                new FrameBit(0, 2, true),
+                new FrameBit(0, 3, true),
+                new FrameBit(0, 4, true),
+                new FrameBit(0, 5, true),
+                new FrameBit(0, 6, true),
             }
         }),
         new LEDAnim("download", 0.1f, new FrameBit[][]
