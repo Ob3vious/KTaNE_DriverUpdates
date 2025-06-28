@@ -39,13 +39,8 @@ public class DriverUpdatesScript : MonoBehaviour
         
         GetComponent<KMBombModule>().OnActivate += delegate
         {
-            GridRend.SetLED(2, 2, true);
-            GridRend.SetLED(2, 5, true);
-            GridRend.SetLED(4, 2, true);
-            GridRend.SetLED(4, 5, true);
-            GridRend.SetLED(5, 3, true);
-            GridRend.SetLED(5, 4, true);
             //StartCoroutine(FetchPuzzle());
+            GridRend.MakeActive();
 
             IsActive = true;
         };

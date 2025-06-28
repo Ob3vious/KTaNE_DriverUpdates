@@ -83,6 +83,7 @@ public class StFetch : UpdaterStateMachine.State
 
             //threads needed here
             StateMachine.Module.Marquee.AssignTexts(new string[] { "Connecting..." });
+            StateMachine.Module.GridRend.RunAnimation("wifi");
             yield return new WaitWhile(() => _isUsingThreads);
             _isUsingThreads = true;
             bool generated = false;
@@ -96,6 +97,7 @@ public class StFetch : UpdaterStateMachine.State
             _thread.Start();
 
             StateMachine.Module.Marquee.AssignTexts(new string[] { "Fetching Updates..." });
+            StateMachine.Module.GridRend.RunAnimation("download");
             yield return new WaitWhile(() => !generated);
             _isUsingThreads = false;
             _thread = null;
@@ -104,6 +106,7 @@ public class StFetch : UpdaterStateMachine.State
             {
                 Debug.Log("fail:" + StateMachine.Module.PotentialSolution.Join(","));
                 StateMachine.Module.Marquee.AssignTexts(new string[] { "Connection Lost" });
+                StateMachine.Module.GridRend.RunAnimation("x");
             }
         }
         //bends add 1pt each to complexity
@@ -113,6 +116,7 @@ public class StFetch : UpdaterStateMachine.State
         StateMachine.Module.ComponentsSelectionImmutable = new List<bool> { true, true, false, false };
 
         StateMachine.Module.Marquee.AssignTexts(new string[] { "Updates Gathered|Press Confirm" });
+        StateMachine.Module.GridRend.RunAnimation("tick");
 
         Debug.Log(Enumerable.Range(0, 8).Select(y => Enumerable.Range(0, 8).Select(x => StateMachine.Module.Puzzle.Grid[y, x] ? "#" : ".").Join("")).Join(";"));
         Debug.Log(StateMachine.Module.PotentialSolution.Join(","));
@@ -133,6 +137,7 @@ public class StFetch : UpdaterStateMachine.State
     public override void OnStart()
     {
         StateMachine.Module.Marquee.AssignTexts(new string[] { "Booting Up..." });
+        StateMachine.Module.GridRend.RunAnimation("throbber");
         GenerateUpdateLogs();
         _fetchingRoutine = StateMachine.Module.StartCoroutine(FetchPuzzle());
         base.OnStart();

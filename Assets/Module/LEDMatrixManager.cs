@@ -10,4 +10,22 @@ public class LEDMatrixManager : MonoBehaviour
     {
         AllDisplays[(row > 7 ? 2 : 0) + (col > 7 ? 1 : 0)].SetLED(row % 8, col % 8, state);
     }
+
+    public void RunAnimation(string name)
+    {
+        for (int i = 0; i < AllDisplays.Length; i++)
+            AllDisplays[i].RunAnimation(name);
+    }
+
+    public void BlankOut()
+    {
+        for (int i = 0; i < AllDisplays.Length; i++)
+            AllDisplays[i].BlankOut();
+    }
+
+    public void MakeActive()
+    {
+        for (int i = 0; i < AllDisplays.Length; i++)
+            AllDisplays[i].MakeActive();
+    }
 }
