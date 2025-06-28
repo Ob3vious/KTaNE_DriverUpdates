@@ -587,6 +587,9 @@ MonoBehaviour:
   - {fileID: 722516078}
   - {fileID: 1010415185}
   - {fileID: 1188026928}
+  ComponentSizes: 
+  ComponentsSelected: 
+  ComponentsSelectionImmutable: 
 --- !u!114 &407782592
 MonoBehaviour:
   m_ObjectHideFlags: 0

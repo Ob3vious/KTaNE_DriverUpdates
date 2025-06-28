@@ -17,6 +17,12 @@ public class LEDMatrixManager : MonoBehaviour
             AllDisplays[i].RunAnimation(name);
     }
 
+    public void ClearAnimation()
+    {
+        for (int i = 0; i < AllDisplays.Length; i++)
+            AllDisplays[i].ClearAnimation();
+    }
+
     public void BlankOut()
     {
         for (int i = 0; i < AllDisplays.Length; i++)

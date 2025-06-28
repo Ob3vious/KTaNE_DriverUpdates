@@ -39,7 +39,7 @@ public class MarqueeDisplay : MonoBehaviour
         Text.text = "";
     }
 
-    public void AssignTexts(string[] newTexts)
+    public void AssignTexts(string[] newTexts, bool isStatic = false)
     {
         if (CycleAnimCoroutine != null)
             StopCoroutine(CycleAnimCoroutine);
@@ -47,10 +47,10 @@ public class MarqueeDisplay : MonoBehaviour
 
         AllTexts = newTexts;
 
-        CycleAnimCoroutine = StartCoroutine(CycleAnim());
+        CycleAnimCoroutine = StartCoroutine(CycleAnim(isStatic));
     }
 
-    private IEnumerator CycleAnim(float interval = 2.5f, float offInterval = 0.035f)
+    private IEnumerator CycleAnim(bool isStatic, float interval = 2.5f, float offInterval = 0.035f)
     {
         var formattedTexts = AllTexts.Select(x => FormatText(x)).ToArray();
         var isFirst = true;
@@ -58,8 +58,8 @@ public class MarqueeDisplay : MonoBehaviour
         {
             for (int i = 0; i < formattedTexts.Length; i++)
             {
-                if (isFirst || 
-                    formattedTexts[i][0] != formattedTexts[(i + formattedTexts.Length - 1) % formattedTexts.Length][0] || formattedTexts[i][1] != formattedTexts[(i + formattedTexts.Length - 1) % formattedTexts.Length][1])
+                if (!isStatic && (isFirst || 
+                    formattedTexts[i][0] != formattedTexts[(i + formattedTexts.Length - 1) % formattedTexts.Length][0] || formattedTexts[i][1] != formattedTexts[(i + formattedTexts.Length - 1) % formattedTexts.Length][1]))
                 {
                     var randomSound = 0;
                     if (formattedTexts[i][0].Length > 0 || formattedTexts[i][1].Length > 0)
@@ -84,7 +84,7 @@ public class MarqueeDisplay : MonoBehaviour
 
                 yield return new WaitForSeconds(interval);
 
-                if (formattedTexts[i][0] != formattedTexts[(i + 1) % formattedTexts.Length][0] || formattedTexts[i][1] != formattedTexts[(i + 1) % formattedTexts.Length][1])
+                if (!isStatic && (formattedTexts[i][0] != formattedTexts[(i + 1) % formattedTexts.Length][0] || formattedTexts[i][1] != formattedTexts[(i + 1) % formattedTexts.Length][1]))
                 {
                     if (formattedTexts[i][0].Length > 0 || formattedTexts[i][1].Length > 0)
                         for (int j = 0; j < Mathf.Min(Mathf.Max(formattedTexts[i][0].Length, formattedTexts[i][1].Length), RowLength); j++)
