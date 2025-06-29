@@ -50,7 +50,8 @@ public class MarqueeDisplay : MonoBehaviour
         CycleAnimCoroutine = StartCoroutine(CycleAnim(isStatic));
     }
 
-    private IEnumerator CycleAnim(bool isStatic, float interval = 2.5f, float offInterval = 0.035f)
+    //private IEnumerator CycleAnim(bool isStatic, float interval = 2.5f, float offInterval = 0.035f)
+    private IEnumerator CycleAnim(bool isStatic, float interval = 1f, float offInterval = 0.035f)
     {
         var formattedTexts = AllTexts.Select(x => FormatText(x)).ToArray();
         var isFirst = true;

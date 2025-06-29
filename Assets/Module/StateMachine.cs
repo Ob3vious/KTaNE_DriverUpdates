@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
+using UnityEditorInternal;
 using UnityEngine;
 
 public class UpdaterStateMachine
@@ -127,12 +128,15 @@ public class StFetch : UpdaterStateMachine.State
         List<int> shapeOrder = new List<int>();
         while (shapeOrder.Count < StateMachine.Module.ComponentSizes.Count)
             shapeOrder.Add(Enumerable.Range(0, StateMachine.Module.ComponentSizes.Count)
-                .First(x => !shapeOrder.Contains(x) && StateMachine.Module.PotentialSolution[shapeOrder.Count].Value == StateMachine.Module.ComponentSizes[x]));
+                .First(x => !shapeOrder.Contains(x) && StateMachine.Module.ComponentSizes[shapeOrder.Count] == StateMachine.Module.PotentialSolution[x].Value));
+
+        StateMachine.Module.PotentialSolution = shapeOrder.Select(x => StateMachine.Module.PotentialSolution[x]).ToList();
+        shapeOrder = Enumerable.Range(0, shapeOrder.Count).ToList();
 
         StateMachine.Module.Log("Found a grid and solution with sizes [{0}]: {1}.", StateMachine.Module.ComponentSizes.Join(", "),
-            Enumerable.Range(0, 8).Select(y => Enumerable.Range(0, 8).Select(x =>
-            StateMachine.Module.Puzzle.Grid[y, x] ? "#" :
-            (shapeOrder.Any(z => StateMachine.Module.PotentialSolution[z].Cell(x, y)) ? (shapeOrder.First(z => StateMachine.Module.PotentialSolution[z].Cell(x, y)) + 1).ToString() : "-")).Join("")).Join(";"));
+             Enumerable.Range(0, 8).Select(y => Enumerable.Range(0, 8).Select(x =>
+             StateMachine.Module.Puzzle.Grid[y, x] ? "#" :
+             (shapeOrder.Any(z => StateMachine.Module.PotentialSolution[z].Cell(x, y)) ? (shapeOrder.First(z => StateMachine.Module.PotentialSolution[z].Cell(x, y)) + 1).ToString() : "-")).Join("")).Join(";"));
 
         //thread stuff is done here
 
@@ -684,7 +688,7 @@ public class StInstall : UpdaterStateMachine.State
 
     private IEnumerator InstallUpdates()
     {
-        int timeMult = StateMachine.Module.ComponentsSelected[3] ? 10 : 120;
+        int timeMult = StateMachine.Module.ComponentsSelected[3] ? 15 : 120;
         float timeTotal = UnityEngine.Random.Range(1f, 2f) * timeMult;
         Queue<float> percentageIncreaseMoments = new Queue<float>(Enumerable.Range(0, 99).Select(_ => UnityEngine.Random.Range(0, timeTotal)).OrderBy(x => x));
 
@@ -779,7 +783,7 @@ public class StInstall : UpdaterStateMachine.State
                         _doesPass = Pass.Unpressed;
                         break;
                     case Pass.Unpressed:
-                        if (Math.Abs(_percentage - UpdateLog.EvaluateTotalScore(StateMachine.Module.UpdateLogList)) > 5)
+                        if (Math.Abs(_percentage - UpdateLog.EvaluateTotalScore(StateMachine.Module.UpdateLogList)) > 2)
                         {
                             StateMachine.Module.Log("Pressed confirm at the wrong time. The update will fail.");
                             _doesPass = Pass.Failed;
