@@ -1,12 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using KModkit;
-using Rnd = UnityEngine.Random;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Threading;
-using Newtonsoft.Json.Linq;
 
 public class DriverUpdatesScript : MonoBehaviour
 {
@@ -80,6 +74,7 @@ public class DriverUpdatesScript : MonoBehaviour
             StopCoroutine(SideButtonAnimCoroutines[pos]);
         SideButtonAnimCoroutines[pos] = StartCoroutine(SideButtonAnim(pos, false));
 
+        SideButtons[pos].AddInteractionPunch(1f);
         _stateMachine.CurrentState.OnPress(pos);
     }
 

@@ -67,7 +67,7 @@ public class MarqueeDisplay : MonoBehaviour
                         {
                             if (isFirst)
                             {
-                                Audio.PlaySoundAtTransform("blip " + randomSound, transform);
+                                //Audio.PlaySoundAtTransform("blip " + randomSound, transform);
 
                                 if (randomSound != 0)
                                     randomSound = 0;
