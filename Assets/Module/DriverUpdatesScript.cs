@@ -135,10 +135,8 @@ public class DriverUpdatesScript : MonoBehaviour
         _pickedCommands.Clear();
         foreach (string command in commands)
         {
-            if (!_availableCommands.ContainsKey(command))
-                //throw new Exception(command + " is not present in the list of registered commands.");
-                ;
-            else
+            //throw new Exception(command + " is not present in the list of registered commands.");
+            if (_availableCommands.ContainsKey(command))
                 _pickedCommands.Add(command);
         }
     }
@@ -197,5 +195,14 @@ public class DriverUpdatesScript : MonoBehaviour
         yield return null;
     }
 
-
+    IEnumerator TwitchHandleForcedSolve()
+    {
+        yield return null;
+        while (!(_stateMachine.CurrentState is StSolve))
+        {
+            IEnumerator program = _stateMachine.CurrentState.HandleTwitchPlaysForceSolve();
+            while (program.MoveNext())
+                yield return program.Current;
+        }
+    }
 }

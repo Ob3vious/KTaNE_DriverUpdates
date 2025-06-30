@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using UnityEditorInternal;
 using UnityEngine;
 
 public class UpdaterStateMachine
@@ -25,14 +26,17 @@ public class UpdaterStateMachine
         {
             StateMachine.Module.SetTwitchCommandActive(GetTwitchPlaysCommandsAllowed().ToArray());
         }
+
         public virtual void OnEnd()
         {
 
         }
+
         public virtual void OnPress(int button)
         {
 
         }
+
         public virtual List<DriverUpdatesScript.TwitchPlaysCommand> GetTwitchPlaysCommands()
         {
             return new List<DriverUpdatesScript.TwitchPlaysCommand>();
@@ -41,6 +45,11 @@ public class UpdaterStateMachine
         public virtual List<string> GetTwitchPlaysCommandsAllowed()
         {
             return new List<string> { "commands" };
+        }
+
+        public virtual IEnumerator HandleTwitchPlaysForceSolve()
+        {
+            yield return true;
         }
     }
 
@@ -66,7 +75,6 @@ public class UpdaterStateMachine
         CurrentState = newState;
         newState.OnStart();
     }
-
 }
 
 public class StFetch : UpdaterStateMachine.State
@@ -220,6 +228,18 @@ public class StFetch : UpdaterStateMachine.State
         StateMachine.Module.SideButtons[index].OnInteractEnded();
         yield return new WaitForSeconds(0.05f);
     }
+
+    public override IEnumerator HandleTwitchPlaysForceSolve()
+    {
+        yield return null;
+        while (!_ready)
+            yield return true;
+
+        StateMachine.Module.SideButtons[3].OnInteract();
+        yield return new WaitForSeconds(0.05f);
+        StateMachine.Module.SideButtons[3].OnInteractEnded();
+        yield return new WaitForSeconds(0.05f);
+    }
 }
 
 public class StList : UpdaterStateMachine.State
@@ -307,6 +327,15 @@ public class StList : UpdaterStateMachine.State
             StateMachine.Module.SideButtons[direction].OnInteractEnded();
             yield return new WaitForSeconds(0.05f);
         }
+    }
+
+    public override IEnumerator HandleTwitchPlaysForceSolve()
+    {
+        yield return null;
+        StateMachine.Module.SideButtons[3].OnInteract();
+        yield return new WaitForSeconds(0.05f);
+        StateMachine.Module.SideButtons[3].OnInteractEnded();
+        yield return new WaitForSeconds(0.05f);
     }
 }
 
@@ -444,6 +473,44 @@ public class StPick : UpdaterStateMachine.State
             yield return "sendtochaterror {0}, selection of '" + StateMachine.Module.ComponentNames[_index] + "' cannot be altered.";
             yield break;
         }
+        StateMachine.Module.SideButtons[3].OnInteract();
+        yield return new WaitForSeconds(0.05f);
+        StateMachine.Module.SideButtons[3].OnInteractEnded();
+        yield return new WaitForSeconds(0.05f);
+    }
+
+    public override IEnumerator HandleTwitchPlaysForceSolve()
+    {
+        yield return null;
+
+        int index = Enumerable.Range(0, StateMachine.Module.ComponentsSelected.Count).IndexOf(x => !StateMachine.Module.ComponentsSelected[x] && !StateMachine.Module.ComponentsSelectionImmutable[x]);
+        if (index == -1)
+            index = StateMachine.Module.ComponentsSelected.Count;
+
+        while (_index > index)
+        {
+            StateMachine.Module.SideButtons[0].OnInteract();
+            yield return new WaitForSeconds(0.05f);
+            StateMachine.Module.SideButtons[0].OnInteractEnded();
+            yield return new WaitForSeconds(0.05f);
+        }
+
+        while (_index < StateMachine.Module.ComponentsSelected.Count)
+        {
+            if (!StateMachine.Module.ComponentsSelected[_index] && !StateMachine.Module.ComponentsSelectionImmutable[_index])
+            {
+                StateMachine.Module.SideButtons[3].OnInteract();
+                yield return new WaitForSeconds(0.05f);
+                StateMachine.Module.SideButtons[3].OnInteractEnded();
+                yield return new WaitForSeconds(0.05f);
+            }
+
+            StateMachine.Module.SideButtons[1].OnInteract();
+            yield return new WaitForSeconds(0.05f);
+            StateMachine.Module.SideButtons[1].OnInteractEnded();
+            yield return new WaitForSeconds(0.05f);
+        }
+
         StateMachine.Module.SideButtons[3].OnInteract();
         yield return new WaitForSeconds(0.05f);
         StateMachine.Module.SideButtons[3].OnInteractEnded();
@@ -923,6 +990,145 @@ public class StAllocate : UpdaterStateMachine.State
         StateMachine.Module.SideButtons[3].OnInteractEnded();
         yield return new WaitForSeconds(0.05f);
     }
+
+    public override IEnumerator HandleTwitchPlaysForceSolve()
+    {
+        yield return null;
+
+        if (Enumerable.Range(0, StateMachine.Module.ComponentSizes.Count).All(x => !StateMachine.Module.ComponentsSelected[x] || (_shapes[x] != null && StateMachine.Module.ComponentSizes[x] == _shapes[x].Value)))
+        {
+            StateMachine.Module.SideButtons[3].OnInteract();
+            yield return new WaitForSeconds(0.05f);
+            StateMachine.Module.SideButtons[3].OnInteractEnded();
+            yield return new WaitForSeconds(0.05f);
+            yield break;
+        }
+
+        List<bool> partialSolves = Enumerable.Range(0, StateMachine.Module.ComponentSizes.Count)
+            .Select(x => !StateMachine.Module.ComponentsSelected[x] || _shapes[x] == null || StateMachine.Module.PotentialSolution[x].ContainsAsSubset(_shapes[x])).ToList();
+
+        while (partialSolves.Any(x => !x))
+        {
+            int toClean = partialSolves.IndexOf(false);
+            while (_selectedRegion)
+            {
+                StateMachine.Module.SideButtons[2].OnInteract();
+                yield return new WaitForSeconds(0.05f);
+                StateMachine.Module.SideButtons[2].OnInteractEnded();
+                yield return new WaitForSeconds(0.05f);
+            }
+
+            int direction = _index < toClean ? 1 : 0;
+            while (_index != toClean)
+            {
+                StateMachine.Module.SideButtons[direction].OnInteract();
+                yield return new WaitForSeconds(0.05f);
+                StateMachine.Module.SideButtons[direction].OnInteractEnded();
+                yield return new WaitForSeconds(0.05f);
+            }
+
+            StateMachine.Module.SideButtons[2].OnInteract();
+            yield return new WaitForSeconds(0.05f);
+            StateMachine.Module.SideButtons[2].OnInteractEnded();
+            yield return new WaitForSeconds(0.05f);
+
+            partialSolves[toClean] = true;
+        }
+
+        List<bool> unfinishedSolves = Enumerable.Range(0, StateMachine.Module.ComponentSizes.Count)
+            .Select(x => !StateMachine.Module.ComponentsSelected[x] || (_shapes[x] != null && StateMachine.Module.ComponentSizes[x] == _shapes[x].Value)).ToList();
+
+        while (unfinishedSolves.Any(x => !x))
+        {
+            int toFill = unfinishedSolves.IndexOf(false);
+            while (_selectedRegion && toFill != _index)
+            {
+                StateMachine.Module.SideButtons[2].OnInteract();
+                yield return new WaitForSeconds(0.05f);
+                StateMachine.Module.SideButtons[2].OnInteractEnded();
+                yield return new WaitForSeconds(0.05f);
+            }
+
+            int direction = _index < toFill ? 1 : 0;
+            while (_index != toFill)
+            {
+                StateMachine.Module.SideButtons[direction].OnInteract();
+                yield return new WaitForSeconds(0.05f);
+                StateMachine.Module.SideButtons[direction].OnInteractEnded();
+                yield return new WaitForSeconds(0.05f);
+            }
+
+            if (!_selectedRegion)
+            {
+                StateMachine.Module.SideButtons[3].OnInteract();
+                yield return new WaitForSeconds(0.05f);
+                StateMachine.Module.SideButtons[3].OnInteractEnded();
+                yield return new WaitForSeconds(0.05f);
+            }
+
+            int width = StateMachine.Module.Puzzle.Width;
+            List<int> corners = new List<int>();
+            for (int i = 0; i < StateMachine.Module.Puzzle.Height; i++)
+                for (int j = 0; j < StateMachine.Module.Puzzle.Width; j++)
+                {
+                    if (!StateMachine.Module.PotentialSolution[_index].Cell(j, i))
+                        continue;
+                    if (i > 0 && StateMachine.Module.PotentialSolution[_index].Cell(j, i - 1) && i < StateMachine.Module.Puzzle.Height - 1 && StateMachine.Module.PotentialSolution[_index].Cell(j, i + 1))
+                        continue;
+                    if (j > 0 && StateMachine.Module.PotentialSolution[_index].Cell(j - 1, i) && j < StateMachine.Module.Puzzle.Width - 1 && StateMachine.Module.PotentialSolution[_index].Cell(j + 1, i))
+                        continue;
+                    corners.Add(j + width * i);
+                }
+            while (_shapes[_index].Value < StateMachine.Module.ComponentSizes[_index])
+            {
+                int targetCell;
+                if (_selectedCell >= 0)
+                {
+                    if (!corners.Contains(_selectedCell))
+                    {
+                        StateMachine.Module.SideButtons[2].OnInteract();
+                        yield return new WaitForSeconds(0.05f);
+                        StateMachine.Module.SideButtons[2].OnInteractEnded();
+                        yield return new WaitForSeconds(0.05f);
+                        continue;
+                    }
+
+                    List<int> availableCorners = corners.Where(x => _candidates.Contains(x)).ToList();
+                    List<DriverStoragePuzzle.Shape> shapes = availableCorners.Select(x => new DriverStoragePuzzle.Shape(StateMachine.Module.Puzzle.Width, StateMachine.Module.Puzzle.Height)).ToList();
+                    for (int i = 0; i < shapes.Count; i++)
+                    {
+                        int x1 = _selectedCell % width;
+                        int x2 = availableCorners[i] % width;
+                        int y1 = _selectedCell / width;
+                        int y2 = availableCorners[i] / width;
+
+                        shapes[i].RegisterRect(Math.Min(y1, y2) * width + Math.Min(x1, x2), Math.Max(y1, y2) * width + Math.Max(x1, x2));
+                    }
+                    targetCell = availableCorners[Enumerable.Range(0, availableCorners.Count).First(x => StateMachine.Module.PotentialSolution[_index].ContainsAsSubset(shapes[x]))];
+                }
+                else
+                    targetCell = corners.Where(x => _candidates.Contains(x)).First();
+
+                int targetIndex = _candidates.IndexOf(targetCell);
+                int cursorIndex = _candidates.IndexOf(_cursor);
+                int direction2 = (cursorIndex < targetIndex) == (Math.Max(cursorIndex, targetIndex) - Math.Min(cursorIndex, targetIndex) < Math.Min(cursorIndex, targetIndex) + _candidates.Count - Math.Max(cursorIndex, targetIndex)) ? 1 : 0;
+                while (_cursor != targetCell)
+                {
+                    StateMachine.Module.SideButtons[direction2].OnInteract();
+                    yield return new WaitForSeconds(0.05f);
+                    StateMachine.Module.SideButtons[direction2].OnInteractEnded();
+                    yield return new WaitForSeconds(0.05f);
+                }
+
+                StateMachine.Module.SideButtons[3].OnInteract();
+                yield return new WaitForSeconds(0.05f);
+                StateMachine.Module.SideButtons[3].OnInteractEnded();
+                yield return new WaitForSeconds(0.05f);
+            }
+
+            unfinishedSolves[toFill] = true;
+        }
+    }
 }
 
 public class StInstall : UpdaterStateMachine.State
@@ -1114,6 +1320,28 @@ public class StInstall : UpdaterStateMachine.State
         yield return new WaitForSeconds(0.05f);
         StateMachine.Module.SideButtons[3].OnInteractEnded();
         yield return new WaitForSeconds(0.05f);
+    }
+
+    public override IEnumerator HandleTwitchPlaysForceSolve()
+    {
+        yield return null;
+
+        bool needsMoreComponents = Enumerable.Range(0, StateMachine.Module.ComponentSizes.Count).Any(x => !StateMachine.Module.ComponentsSelected[x] && !StateMachine.Module.ComponentsSelectionImmutable[x]);
+
+        if (!needsMoreComponents)
+        {
+            while (StateMachine.CurrentState is StInstall)
+                yield return true;
+            yield break;
+        }
+
+        while (StateMachine.CurrentState is StInstall)
+        {
+            StateMachine.Module.SideButtons[2].OnInteract();
+            yield return new WaitForSeconds(0.05f);
+            StateMachine.Module.SideButtons[2].OnInteractEnded();
+            yield return new WaitForSeconds(0.05f);
+        }
     }
 }
 

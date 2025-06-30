@@ -172,6 +172,30 @@ public class DriverStoragePuzzle
             return false;
         }
 
+        public bool ContainsAsSubset(Shape subset)
+        {
+            for (int i = 0; i < _height; i++)
+                for (int j = 0; j < _width; j++)
+                {
+                    bool parentCell = Cell(j, i);
+                    bool childCell = subset.Cell(j, i);
+                    if (!parentCell && childCell)
+                        return false;
+                    if (!parentCell)
+                        continue;
+
+                    //horizontal mismatch within connected parent span
+                    if (j + 1 < _width && Cell(j + 1, i) && subset.Cell(j + 1, i) != childCell)
+                        return false;
+
+                    //vertical mismatch within connected parent span
+                    if (i + 1 < _height && Cell(j, i + 1) && subset.Cell(j, i + 1) != childCell)
+                        return false;
+                }
+
+            return true;
+        }
+
         public override string ToString()
         {
             return _cellValues.Select(x => x > 0 ? '1' : (x < 0 ? '-' : '0')).Join("") + ";" + Value;
