@@ -496,7 +496,7 @@ public class StAllocate : UpdaterStateMachine.State
 
         frames[0] = frames[0].Concat(frames[1].Select(x => new LEDMatrixSmall.FrameBit(x.Row, x.Column, true))).ToArray();
 
-        StateMachine.Module.GridRend.AllDisplays.First().RunAnimation(new LEDMatrixSmall.LEDAnim("gridRender", 0.5f, frames));
+        StateMachine.Module.GridRend.AllDisplays.First().RunAnimation(new LEDMatrixSmall.LEDAnim("gridRender", _selectedCell < 0 ? 0.25f : 0.5f, frames));
     }
 
     private void UpdateText()
