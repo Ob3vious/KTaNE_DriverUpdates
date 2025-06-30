@@ -1,5 +1,8 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
+using UnityEditorInternal;
 using UnityEngine;
 
 public class DriverUpdatesScript : MonoBehaviour
@@ -31,10 +34,12 @@ public class DriverUpdatesScript : MonoBehaviour
         _moduleID = _moduleIdCounter++;
         IsActive = false;
 
+        RegisterTwitchCommand(new TwitchPlaysCommand("commands", "'commands' to list all currently available commands.", new Func<IEnumerator>(() => TwitchListCommands()), 0));
+
         _stateMachine = new UpdaterStateMachine(this);
         _stateMachine.SwitchState<StFetch>();
 
-        
+
         GetComponent<KMBombModule>().OnActivate += delegate
         {
             //StartCoroutine(FetchPuzzle());
@@ -52,10 +57,6 @@ public class DriverUpdatesScript : MonoBehaviour
             SideButtons[x].OnInteractEnded += delegate { SideButtonRelease(x); };
         }
     }
-
-
-
-
 
     void OnDestroy()
     {
@@ -101,4 +102,100 @@ public class DriverUpdatesScript : MonoBehaviour
 
         SideButtons[pos].transform.localPosition = new Vector3(SideButtons[pos].transform.localPosition.x, isUp ? SideButtonInitPosition : SideButtonInitPosition - depression, SideButtons[pos].transform.localPosition.z);
     }
+
+    public class TwitchPlaysCommand
+    {
+        public string Name { get; private set; }
+        public string HelpMessage { get; private set; }
+        public Func<IEnumerator> Enumerator { get; private set; }
+        public int ArgCount { get; private set; }
+
+        public TwitchPlaysCommand(string name, string helpMessage, Func<IEnumerator> enumerator, int argCount)
+        {
+            Name = name;
+            HelpMessage = helpMessage;
+            Enumerator = enumerator;
+            ArgCount = argCount;
+        }
+    }
+
+    private Dictionary<string, TwitchPlaysCommand> _availableCommands = new Dictionary<string, TwitchPlaysCommand>();
+    private List<string> _pickedCommands = new List<string>();
+
+    public void RegisterTwitchCommand(TwitchPlaysCommand command)
+    {
+        if (_availableCommands.ContainsKey(command.Name))
+            return;
+
+        _availableCommands.Add(command.Name, command);
+    }
+
+    public void SetTwitchCommandActive(params string[] commands)
+    {
+        _pickedCommands.Clear();
+        foreach (string command in commands)
+        {
+            if (!_availableCommands.ContainsKey(command))
+                //throw new Exception(command + " is not present in the list of registered commands.");
+                ;
+            else
+                _pickedCommands.Add(command);
+        }
+    }
+
+    public IEnumerator TwitchListCommands()
+    {
+        yield return null;
+        yield return "sendtochat {0}, commands are: " + _pickedCommands.Select(x => _availableCommands[x].HelpMessage).Join(" ");
+    }
+
+    public string[] CurrentCommand;
+#pragma warning disable 414
+    private string TwitchHelpMessage = "'!{0} commands' to get the commands available in a certain window. Interactions can be chained using semicolons (e.g. '!{0} next;next')";
+#pragma warning restore 414
+    private IEnumerator ProcessTwitchCommand(string command)
+    {
+        command = command.ToLowerInvariant();
+
+        string[] commands = command.Split(';');
+
+        foreach (string singleCommand in commands)
+        {
+            string[] commandSegments = singleCommand.Split(' ').Where(x => x.Length > 0).ToArray();
+            if (commandSegments.Length == 0)
+            {
+                yield return "sendtochaterror {0}, unable to execute empty command.";
+                yield break;
+            }
+            string identifier = commandSegments[0];
+            if (!_pickedCommands.Contains(identifier))
+            {
+                yield return "sendtochaterror {0}, could not find command named '" + identifier + "'.";
+                yield break;
+            }
+            if (_availableCommands[identifier].ArgCount != commandSegments.Length - 1)
+            {
+                yield return "sendtochaterror {0}, command expected " + _availableCommands[identifier].ArgCount + " arguments, but was given " + (commandSegments.Length - 1) + ".";
+                yield break;
+            }
+            CurrentCommand = commandSegments;
+
+            IEnumerator program = _availableCommands[identifier].Enumerator.Invoke();
+            while (program.MoveNext())
+            {
+                yield return program.Current;
+                if (program.Current != null && program.Current is string && ((string)program.Current).Split(' ').First() == "sendtochaterror")
+                {
+                    yield break;
+                }
+            }
+
+            //kinda hacky but eh
+            yield return "solve";
+        }
+
+        yield return null;
+    }
+
+
 }

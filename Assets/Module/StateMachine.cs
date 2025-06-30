@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using UnityEngine;
 
@@ -14,11 +15,15 @@ public class UpdaterStateMachine
         public State(UpdaterStateMachine stateMachine)
         {
             StateMachine = stateMachine;
+
+            List<DriverUpdatesScript.TwitchPlaysCommand> tpCommands = GetTwitchPlaysCommands();
+            foreach (DriverUpdatesScript.TwitchPlaysCommand command in tpCommands)
+                StateMachine.Module.RegisterTwitchCommand(command);
         }
 
         public virtual void OnStart()
         {
-
+            StateMachine.Module.SetTwitchCommandActive(GetTwitchPlaysCommandsAllowed().ToArray());
         }
         public virtual void OnEnd()
         {
@@ -27,6 +32,15 @@ public class UpdaterStateMachine
         public virtual void OnPress(int button)
         {
 
+        }
+        public virtual List<DriverUpdatesScript.TwitchPlaysCommand> GetTwitchPlaysCommands()
+        {
+            return new List<DriverUpdatesScript.TwitchPlaysCommand>();
+        }
+
+        public virtual List<string> GetTwitchPlaysCommandsAllowed()
+        {
+            return new List<string> { "commands" };
         }
     }
 
@@ -180,6 +194,32 @@ public class StFetch : UpdaterStateMachine.State
             StateMachine.SwitchState<StList>();
         base.OnPress(button);
     }
+
+    public override List<DriverUpdatesScript.TwitchPlaysCommand> GetTwitchPlaysCommands()
+    {
+        List<DriverUpdatesScript.TwitchPlaysCommand> commands = base.GetTwitchPlaysCommands();
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("previous", "'previous' to press the previous button.", new Func<IEnumerator>(() => TwitchPressButton(0)), 0));
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("next", "'next' to press the next button.", new Func<IEnumerator>(() => TwitchPressButton(1)), 0));
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("cancel", "'cancel' to press the cancel button.", new Func<IEnumerator>(() => TwitchPressButton(2)), 0));
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("confirm", "'confirm' to press the confirm button.", new Func<IEnumerator>(() => TwitchPressButton(3)), 0));
+        return commands;
+    }
+
+    public override List<string> GetTwitchPlaysCommandsAllowed()
+    {
+        List<string> commands = base.GetTwitchPlaysCommandsAllowed();
+        commands.Add("confirm");
+        return commands;
+    }
+
+    public IEnumerator TwitchPressButton(int index)
+    {
+        yield return null;
+        StateMachine.Module.SideButtons[index].OnInteract();
+        yield return new WaitForSeconds(0.05f);
+        StateMachine.Module.SideButtons[index].OnInteractEnded();
+        yield return new WaitForSeconds(0.05f);
+    }
 }
 
 public class StList : UpdaterStateMachine.State
@@ -202,6 +242,7 @@ public class StList : UpdaterStateMachine.State
     public override void OnStart()
     {
         _index = 0;
+        StateMachine.Module.GridRend.ClearAnimation();
         ShowCurrentUpdate();
         base.OnStart();
     }
@@ -227,6 +268,45 @@ public class StList : UpdaterStateMachine.State
                 break;
         }
         base.OnPress(button);
+    }
+
+    public override List<DriverUpdatesScript.TwitchPlaysCommand> GetTwitchPlaysCommands()
+    {
+        List<DriverUpdatesScript.TwitchPlaysCommand> commands = base.GetTwitchPlaysCommands();
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("update", "'update #' to go to the update with that number.", new Func<IEnumerator>(() => TwitchGotoUpdate()), 1));
+        return commands;
+    }
+
+    public override List<string> GetTwitchPlaysCommandsAllowed()
+    {
+        List<string> commands = base.GetTwitchPlaysCommandsAllowed();
+        commands.Add("update");
+        commands.Add("previous");
+        commands.Add("next");
+        commands.Add("confirm");
+        return commands;
+    }
+
+    public IEnumerator TwitchGotoUpdate()
+    {
+        yield return null;
+        string param = StateMachine.Module.CurrentCommand[1];
+        int target;
+        if (!(int.TryParse(param, out target) && target > 0 && target <= StateMachine.Module.UpdateLogList.Count))
+        {
+            yield return "sendtochaterror {0}, " + param + " is not a number with an associated update.";
+            yield break;
+        }
+        target--;
+
+        int direction = _index < target ? 1 : 0;
+        while (_index != target)
+        {
+            StateMachine.Module.SideButtons[direction].OnInteract();
+            yield return new WaitForSeconds(0.05f);
+            StateMachine.Module.SideButtons[direction].OnInteractEnded();
+            yield return new WaitForSeconds(0.05f);
+        }
     }
 }
 
@@ -306,6 +386,68 @@ public class StPick : UpdaterStateMachine.State
                 break;
         }
         base.OnPress(button);
+    }
+
+    public override List<DriverUpdatesScript.TwitchPlaysCommand> GetTwitchPlaysCommands()
+    {
+        List<DriverUpdatesScript.TwitchPlaysCommand> commands = base.GetTwitchPlaysCommands();
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("component", "'component #' to go to that component number in order.", new Func<IEnumerator>(() => TwitchGotoComponent(true, false)), 1));
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("toggle", "'toggle #' to go to that component number in order and toggle it.", new Func<IEnumerator>(() => TwitchGotoComponent(true, true)), 1));
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("finalise", "'finalise' to proceed to the next step.", new Func<IEnumerator>(() => TwitchGotoComponent(false, true)), 0));
+        return commands;
+    }
+
+    public override List<string> GetTwitchPlaysCommandsAllowed()
+    {
+        List<string> commands = base.GetTwitchPlaysCommandsAllowed();
+        commands.Add("component");
+        commands.Add("toggle");
+        commands.Add("finalise");
+        commands.Add("previous");
+        commands.Add("next");
+        commands.Add("cancel");
+        commands.Add("confirm");
+        return commands;
+    }
+
+    public IEnumerator TwitchGotoComponent(bool isComponent, bool toggle)
+    {
+        yield return null;
+        int target;
+        if (isComponent)
+        {
+            string param = StateMachine.Module.CurrentCommand[1];
+
+            if (!(int.TryParse(param, out target) && target > 0 && target <= StateMachine.Module.ComponentNames.Count))
+            {
+                yield return "sendtochaterror {0}, " + param + " is not a number with an associated component.";
+                yield break;
+            }
+            target--;
+        }
+        else
+            target = StateMachine.Module.ComponentNames.Count;
+
+        int direction = _index < target ? 1 : 0;
+        while (_index != target)
+        {
+            StateMachine.Module.SideButtons[direction].OnInteract();
+            yield return new WaitForSeconds(0.05f);
+            StateMachine.Module.SideButtons[direction].OnInteractEnded();
+            yield return new WaitForSeconds(0.05f);
+        }
+
+        if (!toggle)
+            yield break;
+        if (isComponent && StateMachine.Module.ComponentsSelectionImmutable[_index])
+        {
+            yield return "sendtochaterror {0}, selection of '" + StateMachine.Module.ComponentNames[_index] + "' cannot be altered.";
+            yield break;
+        }
+        StateMachine.Module.SideButtons[3].OnInteract();
+        yield return new WaitForSeconds(0.05f);
+        StateMachine.Module.SideButtons[3].OnInteractEnded();
+        yield return new WaitForSeconds(0.05f);
     }
 }
 
@@ -663,6 +805,124 @@ public class StAllocate : UpdaterStateMachine.State
         }
         base.OnPress(button);
     }
+
+    public override List<DriverUpdatesScript.TwitchPlaysCommand> GetTwitchPlaysCommands()
+    {
+        List<DriverUpdatesScript.TwitchPlaysCommand> commands = base.GetTwitchPlaysCommands();
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("file", "'file #' to go to that file number in order.", new Func<IEnumerator>(() => TwitchGotoFile(false)), 1));
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("select", "'select #' to go to that file number in order and select it.", new Func<IEnumerator>(() => TwitchGotoFile(true)), 1));
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("cell", "'cell # #' to try and select the cell with those x and y coordinates, top-left being 1 1.", new Func<IEnumerator>(() => TwitchSelectCell()), 2));
+        return commands;
+    }
+
+    public override List<string> GetTwitchPlaysCommandsAllowed()
+    {
+        List<string> commands = base.GetTwitchPlaysCommandsAllowed();
+        commands.Add("file");
+        commands.Add("select");
+        commands.Add("cell");
+        commands.Add("previous");
+        commands.Add("next");
+        commands.Add("cancel");
+        commands.Add("confirm");
+        return commands;
+    }
+
+    public IEnumerator TwitchGotoFile(bool select)
+    {
+        yield return null;
+        int target;
+
+        string param = StateMachine.Module.CurrentCommand[1];
+
+        if (!(int.TryParse(param, out target) && target > 0 && target <= StateMachine.Module.ComponentsSelected.Count(x => x)))
+        {
+            yield return "sendtochaterror {0}, " + param + " is not a number with an associated file.";
+            yield break;
+        }
+        target--;
+        target = Enumerable.Range(0, StateMachine.Module.ComponentsSelected.Count).Where(x => StateMachine.Module.ComponentsSelected[x]).ToArray()[target];
+
+        while (_selectedRegion && (_index != target || !select))
+        {
+            StateMachine.Module.SideButtons[2].OnInteract();
+            yield return new WaitForSeconds(0.05f);
+            StateMachine.Module.SideButtons[2].OnInteractEnded();
+            yield return new WaitForSeconds(0.05f);
+        }
+
+        int direction = _index < target ? 1 : 0;
+        while (_index != target)
+        {
+            StateMachine.Module.SideButtons[direction].OnInteract();
+            yield return new WaitForSeconds(0.05f);
+            StateMachine.Module.SideButtons[direction].OnInteractEnded();
+            yield return new WaitForSeconds(0.05f);
+        }
+
+        if (!select)
+            yield break;
+        EvaluateCandidates();
+        if (_candidates.Count == 0)
+        {
+            yield return "sendtochaterror {0}, cannot select '" + StateMachine.Module.ComponentNames[_index] + "'.";
+            yield break;
+        }
+        StateMachine.Module.SideButtons[3].OnInteract();
+        yield return new WaitForSeconds(0.05f);
+        StateMachine.Module.SideButtons[3].OnInteractEnded();
+        yield return new WaitForSeconds(0.05f);
+    }
+
+    public IEnumerator TwitchSelectCell()
+    {
+        yield return null;
+
+        if (!_selectedRegion)
+        {
+            yield return "sendtochaterror {0}, there is no region currently selected.";
+            yield break;
+        }
+
+        int target1;
+        int target2;
+
+        string param1 = StateMachine.Module.CurrentCommand[1];
+        string param2 = StateMachine.Module.CurrentCommand[2];
+
+        if (!(int.TryParse(param1, out target1) && target1 > 0 && target1 <= StateMachine.Module.Puzzle.Width
+            && int.TryParse(param2, out target2) && target2 > 0 && target2 <= StateMachine.Module.Puzzle.Height))
+        {
+            yield return "sendtochaterror {0}, " + param1 + " " + param2 + " is not a valid coordinate.";
+            yield break;
+        }
+        target1--;
+        target2--;
+
+        int targetCell = target1 + target2 * StateMachine.Module.Puzzle.Width;
+        int targetIndex = _candidates.IndexOf(targetCell);
+        if (targetIndex < 0)
+        {
+            yield return "sendtochaterror {0}, " + param1 + " " + param2 + " is not an available option.";
+            yield break;
+        }
+
+        int cursorIndex = _candidates.IndexOf(_cursor);
+
+        int direction = (cursorIndex < targetIndex) == (Math.Max(cursorIndex, targetIndex) - Math.Min(cursorIndex, targetIndex) < Math.Min(cursorIndex, targetIndex) + _candidates.Count - Math.Max(cursorIndex, targetIndex)) ? 1 : 0;
+        while (_cursor != targetCell)
+        {
+            StateMachine.Module.SideButtons[direction].OnInteract();
+            yield return new WaitForSeconds(0.05f);
+            StateMachine.Module.SideButtons[direction].OnInteractEnded();
+            yield return new WaitForSeconds(0.05f);
+        }
+
+        StateMachine.Module.SideButtons[3].OnInteract();
+        yield return new WaitForSeconds(0.05f);
+        StateMachine.Module.SideButtons[3].OnInteractEnded();
+        yield return new WaitForSeconds(0.05f);
+    }
 }
 
 public class StInstall : UpdaterStateMachine.State
@@ -805,6 +1065,55 @@ public class StInstall : UpdaterStateMachine.State
                 break;
         }
         base.OnPress(button);
+    }
+
+    public override List<DriverUpdatesScript.TwitchPlaysCommand> GetTwitchPlaysCommands()
+    {
+        List<DriverUpdatesScript.TwitchPlaysCommand> commands = base.GetTwitchPlaysCommands();
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("timedconfirm", "'timedconfirm # #' to attempt .", new Func<IEnumerator>(() => TwitchTimedConfirm()), 2));
+        return commands;
+    }
+
+    public override List<string> GetTwitchPlaysCommandsAllowed()
+    {
+        List<string> commands = base.GetTwitchPlaysCommandsAllowed();
+        commands.Add("timedconfirm");
+        commands.Add("cancel");
+        commands.Add("confirm");
+        return commands;
+    }
+
+    public IEnumerator TwitchTimedConfirm()
+    {
+        yield return null;
+
+        int target1;
+        int target2;
+
+        string param1 = StateMachine.Module.CurrentCommand[1];
+        string param2 = StateMachine.Module.CurrentCommand[2];
+
+        if (!(int.TryParse(param1, out target1) && target1 >= 0 && target1 <= 100
+            && int.TryParse(param2, out target2) && target2 >= 0 && target2 <= 100
+            && target1 <= target2))
+        {
+            yield return "sendtochaterror {0}, " + param1 + " " + param2 + " is not a valid range.";
+            yield break;
+        }
+
+        while (_percentage < target1)
+            yield return "trycancel {0}, request to wait for the range of " + param1 + " " + param2 + " has been cancelled.";
+
+        if (_percentage > target2)
+        {
+            yield return "sendtochaterror {0}, percentage has passed the requested range of " + param1 + " " + param2 + ".";
+            yield break;
+        }
+
+        StateMachine.Module.SideButtons[3].OnInteract();
+        yield return new WaitForSeconds(0.05f);
+        StateMachine.Module.SideButtons[3].OnInteractEnded();
+        yield return new WaitForSeconds(0.05f);
     }
 }
 
