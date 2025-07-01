@@ -59,7 +59,7 @@ public class DriverUpdatesScript : MonoBehaviour
 
     void OnDestroy()
     {
-        new UpdaterStateMachine(this).CurrentState.OnEnd();
+        _stateMachine.CurrentState.OnEnd();
     }
 
     public void Log(string text, params object[] args)
