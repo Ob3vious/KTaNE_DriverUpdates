@@ -272,29 +272,25 @@ public class DriverStoragePuzzle
     {
         DriverStoragePuzzle newPuzzle = new DriverStoragePuzzle(this);
 
-        List<int> candidates = new List<int>();
-        for (int i = 0; i < Width * Height; i++)
+        Queue<int> cells = new Queue<int>(Enumerable.Range(0, Width * Height).ToList().Shuffle());
+        while (cells.Count > 0)
         {
-            int x = i % Width;
-            int y = i / Width;
+            int newPos = cells.Dequeue();
+            int x = newPos % Width;
+            int y = newPos / Width;
             if (Grid[y, x])
                 continue;
             DriverStoragePuzzle copy1 = new DriverStoragePuzzle(newPuzzle);
             copy1.Grid[y, x] = true;
             DriverStoragePuzzle copy2 = new DriverStoragePuzzle(copy1);
-            if (copy1.TryFloodFill() && copy2.TryCountRegions() < 4)
-                candidates.Add(i);
+            if (!copy1.TryFloodFill() || copy2.TryCountRegions() >= 4)
+                continue;
+
+            newPuzzle.Grid[y, x] = true;
+
+            return newPuzzle;
         }
-
-        if (candidates.Count == 0)
-            return null;
-
-        int pos = candidates.PickRandom();
-        int newX = pos % Width;
-        int newY = pos / Width;
-        newPuzzle.Grid[newY, newX] = true;
-
-        return newPuzzle;
+        return null;
     }
 
     public List<Shape> SearchSolutionRect(List<int> sizes)
