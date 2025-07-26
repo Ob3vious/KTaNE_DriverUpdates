@@ -1274,7 +1274,7 @@ public class StInstall : UpdaterStateMachine.State
     public override List<DriverUpdatesScript.TwitchPlaysCommand> GetTwitchPlaysCommands()
     {
         List<DriverUpdatesScript.TwitchPlaysCommand> commands = base.GetTwitchPlaysCommands();
-        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("timedconfirm", "'timedconfirm # #' to attempt .", new Func<IEnumerator>(() => TwitchTimedConfirm()), 2));
+        commands.Add(new DriverUpdatesScript.TwitchPlaysCommand("timedconfirm", "'timedconfirm # #' to attempt pressing confirm within the range given.", new Func<IEnumerator>(() => TwitchTimedConfirm()), 2));
         return commands;
     }
 
