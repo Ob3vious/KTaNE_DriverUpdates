@@ -1240,8 +1240,8 @@ public class StInstall : UpdaterStateMachine.State
                 switch (_doesPass)
                 {
                     case Pass.AwaitingRetry:
+                        _doesPass = StateMachine.Module.ComponentsSelected[2] ? Pass.ForcedPass : Pass.Unpressed;
                         _loadingRoutine = StateMachine.Module.StartCoroutine(InstallUpdates());
-                        _doesPass = Pass.Unpressed;
                         break;
                     case Pass.Unpressed:
                         if (Math.Abs(_percentage - UpdateLog.EvaluateTotalScore(StateMachine.Module.UpdateLogList)) > 2)
